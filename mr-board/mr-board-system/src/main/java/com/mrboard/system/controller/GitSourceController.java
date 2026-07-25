@@ -60,6 +60,9 @@ public class GitSourceController {
     @Operation(summary = "创建Git源")
     @PostMapping
     public Result<Void> create(@Valid @RequestBody GitSourceRequest request) {
+        if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
+            return Result.error(400, "Token不能为空");
+        }
         GitSource source = new GitSource();
         source.setName(request.getName());
         source.setPlatformType(request.getPlatformType());
@@ -69,6 +72,7 @@ public class GitSourceController {
         } catch (Exception e) {
             return Result.error(500, "Token加密失败");
         }
+        source.setWebhookSecret(request.getWebhookSecret());
         source.setSyncCron(request.getSyncCron() != null ? request.getSyncCron() : "0 */5 * * * ?");
         source.setIsActive(request.getIsActive() != null ? request.getIsActive() : 1);
         gitSourceMapper.insert(source);
@@ -77,6 +81,7 @@ public class GitSourceController {
             for (String path : request.getProjectPaths()) {
                 Project project = new Project();
                 project.setGitSourceId(source.getId());
+                project.setPlatformProjectId(path.length() > 64 ? path.substring(path.lastIndexOf('/') + 1) : path);
                 project.setProjectPath(path);
                 project.setName(path.substring(path.lastIndexOf('/') + 1));
                 project.setIsActive(1);
@@ -104,9 +109,30 @@ public class GitSourceController {
                 return Result.error(500, "Token加密失败");
             }
         }
+        if (request.getWebhookSecret() != null) {
+            source.setWebhookSecret(request.getWebhookSecret());
+        }
         source.setSyncCron(request.getSyncCron());
         source.setIsActive(request.getIsActive());
         gitSourceMapper.updateById(source);
+
+        // 补充新增的项目路径(已存在的跳过)
+        if (request.getProjectPaths() != null) {
+            for (String path : request.getProjectPaths()) {
+                Long exists = projectMapper.selectCount(new LambdaQueryWrapper<Project>()
+                        .eq(Project::getGitSourceId, id)
+                        .eq(Project::getProjectPath, path));
+                if (exists == 0) {
+                    Project project = new Project();
+                    project.setGitSourceId(id);
+                    project.setPlatformProjectId(path.length() > 64 ? path.substring(path.lastIndexOf('/') + 1) : path);
+                    project.setProjectPath(path);
+                    project.setName(path.substring(path.lastIndexOf('/') + 1));
+                    project.setIsActive(1);
+                    projectMapper.insert(project);
+                }
+            }
+        }
         syncScheduleService.reschedule(id);
         return Result.success();
     }

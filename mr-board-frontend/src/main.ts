@@ -20,6 +20,11 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 }
 
 app.use(createPinia())
+
+// 页面刷新后从 localStorage 恢复用户信息,否则角色相关的菜单/权限计算会丢失
+import { useUserStore } from '@/stores/user'
+useUserStore().initFromStorage()
+
 app.use(router)
 app.use(VueVirtualScroller)
 

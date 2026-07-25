@@ -20,6 +20,7 @@
         <el-table-column label="操作" width="280">
           <template #default="{ row }">
             <el-button link type="primary" @click="testConnection(row.id)">测试连接</el-button>
+            <el-button link type="primary" @click="handleSync(row.id)">同步</el-button>
             <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
             <el-button link type="danger" @click="handleDelete(row.id)">删除</el-button>
           </template>
@@ -46,6 +47,15 @@
         </el-form-item>
         <el-form-item label="Webhook 密钥">
           <el-input v-model="form.webhookSecret" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="项目路径">
+          <el-input
+            v-model="projectPathsText"
+            type="textarea"
+            :rows="3"
+            placeholder="每行一个项目路径，如 group/project&#10;保存后按 Cron 自动同步 MR"
+          />
+          <div v-if="form.id" class="form-tip">编辑时仅追加新项目，已关联项目不受影响</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -74,6 +84,7 @@ interface GitSource {
 const loading = ref(false)
 const list = ref<GitSource[]>([])
 const dialogVisible = ref(false)
+const projectPathsText = ref('')
 const form = reactive<Partial<GitSource>>({
   platformType: 1,
 })
@@ -93,6 +104,7 @@ async function fetchList() {
 }
 
 function openDialog(row?: GitSource) {
+  projectPathsText.value = ''
   if (row) {
     Object.assign(form, { ...row, accessToken: '' })
   } else {
@@ -107,16 +119,33 @@ async function handleSave() {
     return
   }
   try {
+    const projectPaths = projectPathsText.value
+      .split('\n')
+      .map((p) => p.trim())
+      .filter(Boolean)
     if (form.id) {
-      await request.put(`/admin/git-sources/${form.id}`, form)
+      await request.put(`/admin/git-sources/${form.id}`, { ...form, projectPaths })
     } else {
-      await request.post('/admin/git-sources', form)
+      await request.post('/admin/git-sources', { ...form, projectPaths })
     }
-    ElMessage.success('保存成功')
+    ElMessage.success('保存成功，项目将按 Cron 周期自动同步')
     dialogVisible.value = false
     fetchList()
   } catch (e) {
     ElMessage.error('保存失败')
+  }
+}
+
+async function handleSync(id: number) {
+  try {
+    const res: any = await request.post(`/admin/git-sources/${id}/sync`, null, {
+      params: { type: 'full' },
+    })
+    if (res.code === 200) {
+      ElMessage.success(res.data || '同步任务已触发')
+    }
+  } catch (e) {
+    ElMessage.error('同步触发失败')
   }
 }
 
@@ -153,6 +182,12 @@ onMounted(fetchList)
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+
+  .form-tip {
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.5;
   }
 }
 </style>

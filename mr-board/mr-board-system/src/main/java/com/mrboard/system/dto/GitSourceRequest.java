@@ -17,9 +17,10 @@ public class GitSourceRequest {
     @NotBlank(message = "API地址不能为空")
     private String apiBaseUrl;
 
-    @NotBlank(message = "Token不能为空")
+    /** 创建时必填，编辑时留空表示不修改 */
     private String accessToken;
 
+    private String webhookSecret;
     private String syncCron;
     private Integer isActive;
     private List<String> projectPaths;
