@@ -19,6 +19,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+@Tag(name = "认证授权", description = "登录、Token刷新、获取当前用户")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -39,6 +42,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
+    @Operation(summary = "用户登录")
     @PostMapping("/login")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         String lockKey = "login:fail:" + request.getUsername();
@@ -90,6 +94,7 @@ public class AuthController {
         }
     }
 
+    @Operation(summary = "刷新 Access Token")
     @PostMapping("/refresh")
     public Result<LoginResponse> refresh(@RequestHeader("Authorization") String bearerToken) {
         String refreshToken = bearerToken.replace("Bearer ", "");
@@ -129,6 +134,7 @@ public class AuthController {
                 .build());
     }
 
+    @Operation(summary = "获取当前登录用户信息")
     @GetMapping("/me")
     public Result<LoginResponse.UserInfo> me() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

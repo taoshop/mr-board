@@ -18,6 +18,10 @@ export const useUserStore = defineStore(
 
     const isLoggedIn = computed(() => !!accessToken.value)
     const isAdmin = computed(() => userInfo.value?.roles?.includes('admin') || false)
+    const canViewReport = computed(() => {
+      const roles = userInfo.value?.roles || []
+      return roles.some((r) => ['admin', 'pm', 'techlead'].includes(r))
+    })
 
     function setToken(access: string, refresh: string) {
       accessToken.value = access
@@ -57,6 +61,7 @@ export const useUserStore = defineStore(
       userInfo,
       isLoggedIn,
       isAdmin,
+      canViewReport,
       setToken,
       setUserInfo,
       logout,

@@ -8,6 +8,9 @@ import com.mrboard.system.entity.User;
 import com.mrboard.system.entity.UserRole;
 import com.mrboard.system.mapper.UserMapper;
 import com.mrboard.system.mapper.UserRoleMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Tag(name = "用户管理", description = "用户CRUD、角色分配（仅ADMIN）")
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
@@ -28,11 +32,12 @@ public class UserController {
     private final UserRoleMapper userRoleMapper;
     private final PasswordEncoder passwordEncoder;
 
+    @Operation(summary = "用户分页列表")
     @GetMapping
     public Result<Page<User>> list(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer size,
-            @RequestParam(required = false) String keyword) {
+            @Parameter(description = "页码") @RequestParam(defaultValue = "1") Integer page,
+            @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") Integer size,
+            @Parameter(description = "用户名/显示名关键字") @RequestParam(required = false) String keyword) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isEmpty()) {
             wrapper.like(User::getUsername, keyword)
@@ -44,8 +49,9 @@ public class UserController {
         return Result.success(result);
     }
 
+    @Operation(summary = "用户详情")
     @GetMapping("/{id}")
-    public Result<User> getById(@PathVariable Long id) {
+    public Result<User> getById(@Parameter(description = "用户ID") @PathVariable Long id) {
         User user = userMapper.selectById(id);
         if (user == null) {
             return Result.error(1001, "用户不存在");
@@ -53,6 +59,7 @@ public class UserController {
         return Result.success(user);
     }
 
+    @Operation(summary = "创建用户")
     @PostMapping
     @Transactional
     public Result<Void> create(@Valid @RequestBody UserCreateRequest request) {
@@ -84,9 +91,10 @@ public class UserController {
         return Result.success();
     }
 
+    @Operation(summary = "更新用户")
     @PutMapping("/{id}")
     @Transactional
-    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody UserCreateRequest request) {
+    public Result<Void> update(@Parameter(description = "用户ID") @PathVariable Long id, @Valid @RequestBody UserCreateRequest request) {
         User user = userMapper.selectById(id);
         if (user == null) {
             return Result.error(1001, "用户不存在");
@@ -104,15 +112,17 @@ public class UserController {
         return Result.success();
     }
 
+    @Operation(summary = "删除用户")
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
+    public Result<Void> delete(@Parameter(description = "用户ID") @PathVariable Long id) {
         userMapper.deleteById(id);
         return Result.success();
     }
 
+    @Operation(summary = "分配用户角色")
     @PutMapping("/{id}/roles")
     @Transactional
-    public Result<Void> assignRoles(@PathVariable Long id, @RequestBody List<Long> roleIds) {
+    public Result<Void> assignRoles(@Parameter(description = "用户ID") @PathVariable Long id, @RequestBody List<Long> roleIds) {
         userRoleMapper.delete(
                 new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, id)
         );

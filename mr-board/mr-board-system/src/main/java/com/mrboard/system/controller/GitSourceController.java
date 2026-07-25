@@ -12,6 +12,10 @@ import com.mrboard.system.mapper.ProjectMapper;
 import com.mrboard.system.service.SyncService;
 import com.mrboard.system.sync.GitClientFactory;
 import com.mrboard.system.sync.GitSyncClient;
+import com.mrboard.system.job.SyncScheduleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "Git源管理", description = "Git源CRUD、测试连接、手动同步触发（仅ADMIN）")
 @RestController
 @RequestMapping("/api/admin/git-sources")
 @RequiredArgsConstructor
@@ -30,18 +35,21 @@ public class GitSourceController {
     private final AesUtil aesUtil;
     private final GitClientFactory clientFactory;
     private final SyncService syncService;
+    private final SyncScheduleService syncScheduleService;
 
+    @Operation(summary = "Git源分页列表")
     @GetMapping
     public Result<Page<GitSource>> list(
-            @RequestParam(defaultValue = "1") Integer page,
-            @RequestParam(defaultValue = "20") Integer size) {
+            @Parameter(description = "页码") @RequestParam(defaultValue = "1") Integer page,
+            @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") Integer size) {
         Page<GitSource> result = gitSourceMapper.selectPage(new Page<>(page, size), null);
         result.getRecords().forEach(this::maskToken);
         return Result.success(result);
     }
 
+    @Operation(summary = "Git源详情")
     @GetMapping("/{id}")
-    public Result<GitSource> getById(@PathVariable Long id) {
+    public Result<GitSource> getById(@Parameter(description = "Git源ID") @PathVariable Long id) {
         GitSource source = gitSourceMapper.selectById(id);
         if (source != null) {
             maskToken(source);
@@ -49,6 +57,7 @@ public class GitSourceController {
         return Result.success(source);
     }
 
+    @Operation(summary = "创建Git源")
     @PostMapping
     public Result<Void> create(@Valid @RequestBody GitSourceRequest request) {
         GitSource source = new GitSource();
@@ -74,11 +83,13 @@ public class GitSourceController {
                 projectMapper.insert(project);
             }
         }
+        syncScheduleService.schedule(source);
         return Result.success();
     }
 
+    @Operation(summary = "更新Git源")
     @PutMapping("/{id}")
-    public Result<Void> update(@PathVariable Long id, @Valid @RequestBody GitSourceRequest request) {
+    public Result<Void> update(@Parameter(description = "Git源ID") @PathVariable Long id, @Valid @RequestBody GitSourceRequest request) {
         GitSource source = gitSourceMapper.selectById(id);
         if (source == null) {
             return Result.error(404, "Git源不存在");
@@ -96,18 +107,22 @@ public class GitSourceController {
         source.setSyncCron(request.getSyncCron());
         source.setIsActive(request.getIsActive());
         gitSourceMapper.updateById(source);
+        syncScheduleService.reschedule(id);
         return Result.success();
     }
 
+    @Operation(summary = "删除Git源")
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
+    public Result<Void> delete(@Parameter(description = "Git源ID") @PathVariable Long id) {
+        syncScheduleService.remove(id);
         gitSourceMapper.deleteById(id);
         projectMapper.delete(new LambdaQueryWrapper<Project>().eq(Project::getGitSourceId, id));
         return Result.success();
     }
 
+    @Operation(summary = "测试Git源连接")
     @PostMapping("/{id}/test")
-    public Result<String> testConnection(@PathVariable Long id) {
+    public Result<String> testConnection(@Parameter(description = "Git源ID") @PathVariable Long id) {
         GitSource source = gitSourceMapper.selectById(id);
         if (source == null) {
             return Result.error(404, "Git源不存在");
@@ -122,8 +137,11 @@ public class GitSourceController {
         }
     }
 
+    @Operation(summary = "触发同步", description = "支持 full（全量）或 incremental（增量）同步")
     @PostMapping("/{id}/sync")
-    public Result<String> triggerSync(@PathVariable Long id, @RequestParam(defaultValue = "incremental") String type) {
+    public Result<String> triggerSync(
+            @Parameter(description = "Git源ID") @PathVariable Long id,
+            @Parameter(description = "同步类型：full / incremental") @RequestParam(defaultValue = "incremental") String type) {
         GitSource source = gitSourceMapper.selectById(id);
         if (source == null) {
             return Result.error(404, "Git源不存在");

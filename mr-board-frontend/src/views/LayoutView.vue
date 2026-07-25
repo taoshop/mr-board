@@ -47,11 +47,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 
-const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -61,6 +60,9 @@ const menuItems = computed(() => {
     { path: '/git-sources', title: 'Git 源配置', icon: 'Link' },
     { path: '/sync-logs', title: '同步日志', icon: 'Timer' },
   ]
+  if (userStore.canViewReport) {
+    items.push({ path: '/reports', title: '统计报表', icon: 'TrendCharts' })
+  }
   if (userStore.isAdmin) {
     items.push({ path: '/users', title: '用户管理', icon: 'User' })
   }

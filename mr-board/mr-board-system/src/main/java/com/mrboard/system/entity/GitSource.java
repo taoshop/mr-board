@@ -16,6 +16,7 @@ public class GitSource {
     private String apiBaseUrl;
     private String accessToken;
     private String syncCron;
+    private String webhookSecret;
     private Integer isActive;
 
     @TableField(fill = FieldFill.INSERT)

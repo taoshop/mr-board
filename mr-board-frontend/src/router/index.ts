@@ -35,6 +35,12 @@ const router = createRouter({
           meta: { title: '同步日志', icon: 'Timer' },
         },
         {
+          path: 'reports',
+          name: 'Reports',
+          component: () => import('@/views/ReportView.vue'),
+          meta: { title: '统计报表', icon: 'TrendCharts', report: true },
+        },
+        {
           path: 'users',
           name: 'UserManagement',
           component: () => import('@/views/UserManagementView.vue'),
@@ -50,7 +56,7 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const userStore = useUserStore()
 
   if (to.meta.public) {

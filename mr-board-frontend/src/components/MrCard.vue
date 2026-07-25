@@ -1,7 +1,7 @@
 <template>
   <el-card
     class="mr-card"
-    :class="['status-' + status]"
+    :class="['status-' + status, { 'is-conflict': data.hasConflict, 'is-readonly': readOnly }]"
     shadow="hover"
     :body-style="{ padding: '12px' }"
   >
@@ -32,7 +32,7 @@
         </span>
       </div>
       <div class="ci" v-if="data.ciStatus">
-        <el-tag size="small" :type="ciTagType" effect="plain">CI: {{ data.ciStatus }}</el-tag>
+        <CiStatusIcon :status="data.ciStatus" :size="16" />
       </div>
     </div>
     <div class="actions" v-if="!readOnly">
@@ -44,6 +44,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Link, ArrowRight, ChatLineRound, Document } from '@element-plus/icons-vue'
+import CiStatusIcon from './CiStatusIcon.vue'
 
 interface MrData {
   id?: number
@@ -57,6 +58,7 @@ interface MrData {
   ciStatus?: string
   commentsCount?: number
   changesCount?: number
+  hasConflict?: boolean
   webUrl?: string
 }
 
@@ -94,17 +96,6 @@ const tagType = computed(() => {
   }
   return map[status.value] || 'info'
 })
-
-const ciTagType = computed(() => {
-  const map: Record<string, any> = {
-    success: 'success',
-    failed: 'danger',
-    running: 'warning',
-    pending: 'info',
-    canceled: 'info',
-  }
-  return map[props.data.ciStatus || ''] || 'info'
-})
 </script>
 
 <style scoped lang="scss">
@@ -113,9 +104,31 @@ const ciTagType = computed(() => {
   cursor: grab;
   border-left: 4px solid transparent;
   transition: transform 0.2s;
+  position: relative;
 
   &:hover {
     transform: translateY(-2px);
+  }
+
+  &.is-conflict {
+    border: 1px solid #f56c6c;
+    border-left: 4px solid #f56c6c;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #f56c6c;
+      border-radius: 4px 4px 0 0;
+    }
+  }
+
+  &.is-readonly {
+    opacity: 0.7;
+    cursor: not-allowed;
   }
 
   &.status-open { border-left-color: #909399; }

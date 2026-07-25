@@ -1,6 +1,7 @@
 package com.mrboard.system.sync;
 
 import com.mrboard.system.sync.dto.CiDTO;
+import com.mrboard.system.sync.dto.ChangeDTO;
 import com.mrboard.system.sync.dto.MrDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.client.RestTemplate;
@@ -114,6 +115,48 @@ public class GitLabClient implements GitSyncClient {
             }
         } catch (Exception e) {
             log.error("Failed to fetch CI from GitLab: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<ChangeDTO> fetchChanges(String projectPath, Long mrIid) {
+        List<ChangeDTO> result = new ArrayList<>();
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/changes";
+        try {
+            org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, createEntity(), Map.class
+            );
+            Map<String, Object> body = response.getBody();
+            if (body == null) return result;
+            List<Map<String, Object>> changes = (List<Map<String, Object>>) body.get("changes");
+            if (changes == null) return result;
+            for (Map<String, Object> c : changes) {
+                ChangeDTO dto = new ChangeDTO();
+                dto.setOldPath((String) c.get("old_path"));
+                dto.setNewPath((String) c.get("new_path"));
+                dto.setDiff((String) c.get("diff"));
+                Object newFile = c.get("new_file");
+                dto.setNewFile(newFile != null && Boolean.parseBoolean(String.valueOf(newFile)));
+                Object renamedFile = c.get("renamed_file");
+                dto.setRenamedFile(renamedFile != null && Boolean.parseBoolean(String.valueOf(renamedFile)));
+                Object deletedFile = c.get("deleted_file");
+                dto.setDeletedFile(deletedFile != null && Boolean.parseBoolean(String.valueOf(deletedFile)));
+                if (Boolean.TRUE.equals(dto.getNewFile())) {
+                    dto.setStatus("added");
+                } else if (Boolean.TRUE.equals(dto.getDeletedFile())) {
+                    dto.setStatus("deleted");
+                } else if (Boolean.TRUE.equals(dto.getRenamedFile())) {
+                    dto.setStatus("renamed");
+                } else {
+                    dto.setStatus("modified");
+                }
+                result.add(dto);
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch changes from GitLab: {}", e.getMessage());
         }
         return result;
     }

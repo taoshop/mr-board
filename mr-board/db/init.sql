@@ -126,7 +126,7 @@ WHERE r.code = 'reviewer' AND p.code IN ('menu:dashboard','mr:read');
 -- NOTE: The password below is a valid bcrypt hash for "Admin@123".
 -- If you need to regenerate, run: java com.mrboard.system.utils.PasswordGenerator Admin@123
 INSERT INTO users (username, password, email, display_name, department)
-VALUES ('admin', '$2a$12$N4RozZNtQ2LkLz6xY1xOeeC4t/wk6pNQGWyKNUFg5jD7JZkPJVbDy', 'admin@mrboard.com', '系统管理员', '技术部');
+VALUES ('admin', '$2b$12$1SoJpIKAddiHEGWf8mQlK.r7mePkVN2csHGu3TsnJX9xA7aZ84gju', 'admin@mrboard.com', '系统管理员', '技术部');
 
 -- Link admin user to admin role
 INSERT INTO user_roles (user_id, role_id)
@@ -274,17 +274,17 @@ CREATE TABLE IF NOT EXISTS sync_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='同步任务日志表';
 
 -- ------------------------------------------------------------
--- Table: mr_status_history
+-- Table: mr_status_history（结构与 db/V3.1 迁移脚本保持一致）
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS mr_status_history (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
-    mr_id           BIGINT      NOT NULL COMMENT 'MRID',
-    from_status     TINYINT     NOT NULL COMMENT '原状态',
-    to_status       TINYINT     NOT NULL COMMENT '新状态',
-    operation_type  TINYINT     DEFAULT 1 COMMENT '操作类型：1=手动拖拽, 2=系统同步, 3=Git API回调',
-    operator_id     BIGINT COMMENT '操作人ID',
-    remark          VARCHAR(255) COMMENT '备注',
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    mr_id           BIGINT NOT NULL COMMENT '关联的MR ID（mrs表）',
+    from_status     VARCHAR(32) COMMENT '变更前看板状态',
+    to_status       VARCHAR(32) NOT NULL COMMENT '变更后看板状态',
+    operator_id     BIGINT COMMENT '操作人用户ID',
+    operator_name   VARCHAR(64) COMMENT '操作人用户名',
+    operator_ip     VARCHAR(64) COMMENT '操作人IP地址',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '变更时间',
     INDEX idx_mr_id (mr_id),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='MR状态变更历史表';

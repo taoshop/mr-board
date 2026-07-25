@@ -1,6 +1,7 @@
 package com.mrboard.system.sync;
 
 import com.mrboard.system.sync.dto.CiDTO;
+import com.mrboard.system.sync.dto.ChangeDTO;
 import com.mrboard.system.sync.dto.MrDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -106,6 +107,40 @@ public class GitHubClient implements GitSyncClient {
             }
         } catch (Exception e) {
             log.error("Failed to fetch CI from GitHub: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<ChangeDTO> fetchChanges(String repoFullName, Long prNumber) {
+        List<ChangeDTO> result = new ArrayList<>();
+        int page = 1;
+        while (true) {
+            String url = apiBaseUrl + "/repos/" + repoFullName + "/pulls/" + prNumber + "/files?per_page=100&page=" + page;
+            try {
+                ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), List.class);
+                List<Map<String, Object>> files = response.getBody();
+                if (files == null || files.isEmpty()) break;
+                for (Map<String, Object> f : files) {
+                    ChangeDTO dto = new ChangeDTO();
+                    dto.setNewPath((String) f.get("filename"));
+                    dto.setOldPath((String) f.getOrDefault("previous_filename", dto.getNewPath()));
+                    dto.setStatus((String) f.get("status"));
+                    dto.setAdditions((Integer) f.get("additions"));
+                    dto.setDeletions((Integer) f.get("deletions"));
+                    dto.setDiff((String) f.get("patch"));
+                    dto.setNewFile("added".equals(dto.getStatus()));
+                    dto.setDeletedFile("removed".equals(dto.getStatus()));
+                    dto.setRenamedFile("renamed".equals(dto.getStatus()));
+                    result.add(dto);
+                }
+                if (files.size() < 100) break;
+                page++;
+            } catch (Exception e) {
+                log.error("Failed to fetch changes from GitHub: {}", e.getMessage());
+                break;
+            }
         }
         return result;
     }

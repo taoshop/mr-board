@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AesConfig {
 
-    @Value("${AES_KEY:mr-board-aes-key-32-chars-long}")
+    @Value("${AES_KEY:MrBoardAesKey2026SecretKey123456}")
     private String aesKey;
 
     @Bean

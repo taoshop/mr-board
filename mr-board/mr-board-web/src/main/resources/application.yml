@@ -11,6 +11,18 @@ spring:
     time-zone: GMT+8
     default-property-inclusion: non_null
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 ---
 spring:
   config:
@@ -59,6 +71,7 @@ jwt:
 
 logging:
   level:
+    root: info
     com.mrboard: debug
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
@@ -86,4 +99,7 @@ mybatis-plus:
 
 logging:
   level:
+    root: warn
     com.mrboard: info
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

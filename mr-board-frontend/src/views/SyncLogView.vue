@@ -81,7 +81,7 @@ async function fetchLogs() {
   loading.value = true
   try {
     const params = { ...query }
-    const res = await request.get('/api/sync-log', { params })
+    const res = await request.get('/api/admin/sync/logs', { params })
     if (res.data.code === 200) {
       logs.value = res.data.data.records
       total.value = res.data.data.total
