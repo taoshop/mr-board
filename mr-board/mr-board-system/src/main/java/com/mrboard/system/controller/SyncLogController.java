@@ -23,17 +23,21 @@ public class SyncLogController {
 
     private final SyncLogMapper syncLogMapper;
 
-    @Operation(summary = "同步日志分页列表")
+    @Operation(summary = "同步日志分页列表", description = "支持按 Git源、项目、状态筛选")
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
     public Result<Page<SyncLog>> list(
             @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "Git源ID") @RequestParam(required = false) Long gitSourceId,
             @Parameter(description = "项目ID") @RequestParam(required = false) Long projectId,
             @Parameter(description = "同步状态") @RequestParam(required = false) String status
     ) {
         LambdaQueryWrapper<SyncLog> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(SyncLog::getCreatedAt);
+        if (gitSourceId != null) {
+            wrapper.eq(SyncLog::getGitSourceId, gitSourceId);
+        }
         if (projectId != null) {
             wrapper.eq(SyncLog::getProjectId, projectId);
         }
