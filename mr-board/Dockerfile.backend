@@ -1,36 +1,70 @@
-# 后端 Dockerfile - 多阶段构建
-# 阶段 1: 构建
+# ============================================================
+# 后端 Dockerfile - 多阶段构建 + BuildKit cache mount 依赖缓存
+# 适用于 docker / nerdctl + BuildKit
+# ============================================================
+
+# 阶段 1: 编译构建（BuildKit cache mount 缓存 Maven 依赖）
 FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /build
 
-# 配置阿里云 Maven 镜像源
-RUN mkdir -p /root/.m2 && \
-    echo '<?xml version="1.0" encoding="UTF-8"?>' > /root/.m2/settings.xml && \
-    echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"' >> /root/.m2/settings.xml && \
-    echo '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' >> /root/.m2/settings.xml && \
-    echo '  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0' >> /root/.m2/settings.xml && \
-    echo '  https://maven.apache.org/xsd/settings-1.0.0.xsd">' >> /root/.m2/settings.xml && \
-    echo '  <mirrors>' >> /root/.m2/settings.xml && \
-    echo '    <mirror>' >> /root/.m2/settings.xml && \
-    echo '      <id>aliyunmaven</id>' >> /root/.m2/settings.xml && \
-    echo '      <mirrorOf>*</mirrorOf>' >> /root/.m2/settings.xml && \
-    echo '      <name>阿里云公共仓库</name>' >> /root/.m2/settings.xml && \
-    echo '      <url>https://maven.aliyun.com/repository/public</url>' >> /root/.m2/settings.xml && \
-    echo '    </mirror>' >> /root/.m2/settings.xml && \
-    echo '  </mirrors>' >> /root/.m2/settings.xml && \
-    echo '</settings>' >> /root/.m2/settings.xml
+# 配置阿里云 Maven 镜像源（放到 /tmp 避免被 cache mount 覆盖）
+COPY <<'EOF' /tmp/settings.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+  https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyunmaven</id>
+      <mirrorOf>*</mirrorOf>
+      <name>阿里云公共仓库</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+    </mirror>
+  </mirrors>
+</settings>
+EOF
 
+# 只复制 pom.xml（变更频率低，层缓存稳定）
 COPY pom.xml .
 COPY mr-board-common/pom.xml mr-board-common/pom.xml
 COPY mr-board-system/pom.xml mr-board-system/pom.xml
 COPY mr-board-web/pom.xml mr-board-web/pom.xml
-COPY . .
-RUN mvn clean package -Dmaven.test.skip=true -B
 
-# 阶段 2: 运行
+# 预先下载所有依赖到 cache mount
+# pom.xml 不变时，Docker 层缓存会直接跳过这一 RUN
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn dependency:go-offline -B -DskipTests -s /tmp/settings.xml \
+      -Dmaven.wagon.http.retryHandler.count=5 \
+      -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+
+# 复制源码（变更频率高）
+COPY mr-board-common/src mr-board-common/src
+COPY mr-board-system/src mr-board-system/src
+COPY mr-board-web/src mr-board-web/src
+
+# 编译打包（依赖从 cache mount 读取，无需重新下载）
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn clean package -Dmaven.test.skip=true -B -s /tmp/settings.xml \
+      -Dmaven.wagon.http.retryHandler.count=5 \
+      -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+
+# ============================================================
+# 阶段 2: 运行镜像（最小化体积）
+# ============================================================
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
+
+# 安装必要的字体和时区支持（Alpine 精简镜像需要）
+RUN apk add --no-cache tzdata && \
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    apk del tzdata
+
 COPY --from=builder /build/mr-board-web/target/*.jar app.jar
+
 EXPOSE 8080
+
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar --spring.profiles.active=prod"]

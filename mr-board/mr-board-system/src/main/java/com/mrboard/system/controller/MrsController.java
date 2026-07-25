@@ -6,12 +6,14 @@ import com.mrboard.common.result.Result;
 import com.mrboard.common.utils.AesUtil;
 import com.mrboard.system.entity.CiJob;
 import com.mrboard.system.entity.GitSource;
+import com.mrboard.system.entity.MrComment;
 import com.mrboard.system.entity.MrStatusHistory;
 import com.mrboard.system.entity.Mrs;
 import com.mrboard.system.entity.Project;
 import com.mrboard.system.entity.User;
 import com.mrboard.system.mapper.CiJobMapper;
 import com.mrboard.system.mapper.GitSourceMapper;
+import com.mrboard.system.mapper.MrCommentMapper;
 import com.mrboard.system.mapper.MrStatusHistoryMapper;
 import com.mrboard.system.mapper.MrsMapper;
 import com.mrboard.system.mapper.ProjectMapper;
@@ -44,6 +46,7 @@ public class MrsController {
     private final MrsMapper mrsMapper;
     private final CiJobMapper ciJobMapper;
     private final MrStatusHistoryMapper historyMapper;
+    private final MrCommentMapper commentMapper;
     private final UserMapper userMapper;
     private final ProjectMapper projectMapper;
     private final GitSourceMapper gitSourceMapper;
@@ -139,6 +142,21 @@ public class MrsController {
         } catch (Exception e) {
             return Result.error(500, "获取变更文件失败: " + e.getMessage());
         }
+    }
+
+    @Operation(summary = "MR评论列表", description = "查询该MR的缓存评论，按时间倒序")
+    @GetMapping("/{id}/comments")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER','REVIEWER')")
+    public Result<List<MrComment>> getComments(
+            @Parameter(description = "MR主键ID") @PathVariable Long id) {
+        Mrs mr = mrsMapper.selectById(id);
+        if (mr == null) {
+            return Result.error(404, "MR不存在");
+        }
+        LambdaQueryWrapper<MrComment> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MrComment::getMrId, id)
+                .orderByDesc(MrComment::getCreatedAt);
+        return Result.success(commentMapper.selectList(wrapper));
     }
 
     @lombok.Data

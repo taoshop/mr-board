@@ -19,6 +19,9 @@ public class User {
     private String department;
     private String platformUsername;
 
+    @TableField("password_changed")
+    private Boolean passwordChanged;
+
     @TableLogic
     private Integer deleted;
 

@@ -1,0 +1,14 @@
+# ============================================================
+# MR Board System - Prometheus Configuration
+# ============================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'mr-board-backend'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['backend:8080']
+        labels:
+          application: 'mr-board'

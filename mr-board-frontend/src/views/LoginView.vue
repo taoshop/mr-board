@@ -85,11 +85,17 @@ async function handleLogin() {
     loading.value = true
     try {
       const res: any = await login(form)
-      const { accessToken, refreshToken, user } = res.data
+      const { accessToken, refreshToken, user, firstLogin } = res.data
       userStore.setToken(accessToken, refreshToken)
       userStore.setUserInfo(user)
-      ElMessage.success('登录成功')
-      router.push('/')
+      if (firstLogin) {
+        userStore.setMustChangePassword(true)
+        ElMessage.warning('首次登录，请修改默认密码后再使用系统')
+        router.push('/profile')
+      } else {
+        ElMessage.success('登录成功')
+        router.push('/')
+      }
     } catch (err: any) {
       ElMessage.error(err.message || '登录失败')
     } finally {

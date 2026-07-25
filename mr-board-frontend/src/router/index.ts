@@ -46,7 +46,19 @@ const router = createRouter({
           component: () => import('@/views/UserManagementView.vue'),
           meta: { title: '用户管理', icon: 'User', admin: true },
         },
+        {
+          path: 'profile',
+          name: 'Profile',
+          component: () => import('@/views/ProfileView.vue'),
+          meta: { title: '个人设置', icon: 'UserFilled' },
+        },
       ],
+    },
+    {
+      path: '/403',
+      name: 'Forbidden',
+      component: () => import('@/views/ForbiddenView.vue'),
+      meta: { public: true },
     },
     {
       path: '/:pathMatch(.*)*',
@@ -66,6 +78,12 @@ router.beforeEach((to, _from, next) => {
 
   if (!userStore.isLoggedIn) {
     next('/login')
+    return
+  }
+
+  // 强制修改密码：首次登录必须修改默认密码后才能访问其他页面
+  if (userStore.mustChangePassword && to.name !== 'Profile') {
+    next('/profile')
     return
   }
 

@@ -104,3 +104,18 @@ export function getMrChanges(id: number) {
 export function updateMrStatus(id: number, boardStatus: string) {
   return request.put(`/mrs/${id}/status`, { boardStatus }) as Promise<any>
 }
+
+export interface CommentItem {
+  id: number
+  mrId: number
+  platformCommentId: string
+  authorName: string
+  authorAvatar?: string
+  body: string
+  isSystem?: number
+  createdAt: string
+}
+
+export function getMrComments(id: number) {
+  return request.get(`/mrs/${id}/comments`) as Promise<any>
+}

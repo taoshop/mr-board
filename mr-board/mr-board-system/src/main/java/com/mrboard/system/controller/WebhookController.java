@@ -64,7 +64,7 @@ public class WebhookController {
             }
 
             if (isRelevantGitLabEvent(event)) {
-                syncService.syncProject(project.getId());
+                syncService.syncProject(project.getId(), "webhook");
                 processed = true;
                 log.info("GitLab webhook triggered sync for project {}", project.getId());
             } else {
@@ -114,7 +114,7 @@ public class WebhookController {
             }
 
             if (isRelevantGitHubEvent(event)) {
-                syncService.syncProject(project.getId());
+                syncService.syncProject(project.getId(), "webhook");
                 processed = true;
                 log.info("GitHub webhook triggered sync for project {}", project.getId());
             } else {

@@ -1,0 +1,401 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+        "enable": true,
+        "hide": false,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Deployments",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": ["deployment"],
+          "type": "tags"
+        },
+        "type": "tags"
+      }
+    ]
+  },
+  "description": "MR Board System — 运行时监控看板。指标来源：Spring Boot Actuator + Micrometer Prometheus。",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "panels": [],
+      "title": "概览",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#e6a23c", "value": 0.8 },
+              { "color": "red", "value": 0.95 }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{application=\"mr-board\", area=\"heap\"}) / sum(jvm_memory_max_bytes{application=\"mr-board\", area=\"heap\"})",
+          "legendFormat": "Heap Usage",
+          "refId": "A"
+        }
+      ],
+      "title": "JVM Heap 使用率",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#e6a23c", "value": 0.8 },
+              { "color": "red", "value": 0.9 }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "targets": [
+        { "expr": "system_cpu_usage{application=\"mr-board\"}", "legendFormat": "CPU", "refId": "A" }
+      ],
+      "title": "CPU 使用率",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": [],
+          "unit": "bytes"
+        }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 1 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "table", "placement": "right" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "expr": "jvm_memory_used_bytes{application=\"mr-board\", area=\"heap\"}", "legendFormat": "Heap Used", "refId": "A" },
+        { "expr": "jvm_memory_max_bytes{application=\"mr-board\", area=\"heap\"}", "legendFormat": "Heap Max", "refId": "B" },
+        { "expr": "jvm_memory_used_bytes{application=\"mr-board\", area=\"nonheap\"}", "legendFormat": "Non-Heap Used", "refId": "C" }
+      ],
+      "title": "JVM 内存使用",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 1 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "rate(jvm_gc_pause_seconds_count{application=\"mr-board\"}[1m])", "legendFormat": "GC Rate (/s)", "refId": "A" },
+        { "expr": "rate(jvm_gc_pause_seconds_sum{application=\"mr-board\"}[1m]) / rate(jvm_gc_pause_seconds_count{application=\"mr-board\"}[1m])", "legendFormat": "GC Avg Pause (s)", "refId": "B" }
+      ],
+      "title": "JVM GC 活动",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 200,
+      "panels": [],
+      "title": "HTTP 请求",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 6 },
+      "id": 10,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "rate(http_server_requests_seconds_count{application=\"mr-board\"}[1m])", "legendFormat": "All Requests", "refId": "A" }
+      ],
+      "title": "HTTP 请求速率 (RPS)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 6 },
+      "id": 11,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(http_server_requests_seconds_bucket{application=\"mr-board\"}[1m]))", "legendFormat": "P50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=\"mr-board\"}[1m]))", "legendFormat": "P95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{application=\"mr-board\"}[1m]))", "legendFormat": "P99", "refId": "C" }
+      ],
+      "title": "HTTP 请求延迟 (分位数)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": [],
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 6 },
+      "id": 12,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "rate(http_server_requests_seconds_count{application=\"mr-board\", outcome!~\"2..\"}[1m])", "legendFormat": "Non-2xx", "refId": "A" },
+        { "expr": "rate(http_server_requests_seconds_count{application=\"mr-board\", outcome=\"5..\"}[1m])", "legendFormat": "5xx Errors", "refId": "B" }
+      ],
+      "title": "HTTP 错误速率",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 11 },
+      "id": 300,
+      "panels": [],
+      "title": "数据库 & 连接池",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#e6a23c", "value": 15 },
+              { "color": "red", "value": 18 }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 12 },
+      "id": 20,
+      "options": { "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "targets": [
+        { "expr": "hikaricp_connections_active{application=\"mr-board\"}", "legendFormat": "Active", "refId": "A" }
+      ],
+      "title": "HikariCP 活跃连接",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "none" }
+      },
+      "gridPos": { "h": 4, "w": 10, "x": 4, "y": 12 },
+      "id": 21,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "hikaricp_connections_active{application=\"mr-board\"}", "legendFormat": "Active", "refId": "A" },
+        { "expr": "hikaricp_connections_idle{application=\"mr-board\"}", "legendFormat": "Idle", "refId": "B" },
+        { "expr": "hikaricp_connections_pending{application=\"mr-board\"}", "legendFormat": "Pending", "refId": "C" },
+        { "expr": "hikaricp_connections_max{application=\"mr-board\"}", "legendFormat": "Max", "refId": "D" }
+      ],
+      "title": "HikariCP 连接池",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }
+      },
+      "gridPos": { "h": 4, "w": 10, "x": 14, "y": 12 },
+      "id": 22,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "hikaricp_connections_creation_seconds_sum{application=\"mr-board\"} / hikaricp_connections_creation_seconds_count{application=\"mr-board\"}", "legendFormat": "Avg Create Time", "refId": "A" },
+        { "expr": "hikaricp_connections_timeout_total{application=\"mr-board\"}", "legendFormat": "Timeout Total", "refId": "B" }
+      ],
+      "title": "HikariCP 连接耗时与超时",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 400,
+      "panels": [],
+      "title": "系统 & 进程",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 17 },
+      "id": 30,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "process_uptime_seconds{application=\"mr-board\"}", "legendFormat": "Uptime", "refId": "A" }
+      ],
+      "title": "进程运行时间",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes" }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 17 },
+      "id": 31,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "jvm_memory_used_bytes{application=\"mr-board\", area=\"heap\"}", "legendFormat": "Heap Used", "refId": "A" },
+        { "expr": "jvm_memory_committed_bytes{application=\"mr-board\", area=\"heap\"}", "legendFormat": "Heap Committed", "refId": "B" }
+      ],
+      "title": "JVM Heap 趋势",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 17 },
+      "id": 32,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "jvm_threads_live_threads{application=\"mr-board\"}", "legendFormat": "Live Threads", "refId": "A" },
+        { "expr": "jvm_threads_peak_threads{application=\"mr-board\"}", "legendFormat": "Peak Threads", "refId": "B" }
+      ],
+      "title": "JVM 线程数",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "id": 500,
+      "panels": [],
+      "title": "MR Board 业务指标",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "short" }
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 22 },
+      "id": 40,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "rate(http_server_requests_seconds_count{application=\"mr-board\", uri=~\"/api/board.*\"}[1m])", "legendFormat": "/api/board", "refId": "A" },
+        { "expr": "rate(http_server_requests_seconds_count{application=\"mr-board\", uri=~\"/api/auth/login\"}[1m])", "legendFormat": "/api/auth/login", "refId": "B" },
+        { "expr": "rate(http_server_requests_seconds_count{application=\"mr-board\", uri=~\"/api/reports.*\"}[1m])", "legendFormat": "/api/reports", "refId": "C" },
+        { "expr": "rate(http_server_requests_seconds_count{application=\"mr-board\", uri=~\"/api/admin.*\"}[1m])", "legendFormat": "/api/admin", "refId": "D" }
+      ],
+      "title": "核心 API 请求量",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 22 },
+      "id": 41,
+      "options": { "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=\"mr-board\", uri=~\"/api/board\"}[1m]))", "legendFormat": "Board P95", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=\"mr-board\", uri=~\"/api/reports.*\"}[1m]))", "legendFormat": "Reports P95", "refId": "B" },
+        { "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=\"mr-board\", uri=~\"/api/auth/login\"}[1m]))", "legendFormat": "Login P95", "refId": "C" }
+      ],
+      "title": "核心 API P95 延迟",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["mr-board", "spring-boot", "java"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "Prometheus", "value": "PBFA97CFB590B2093" },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": { "selected": true, "text": "mr-board", "value": "mr-board" },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "application",
+        "options": [
+          { "selected": true, "text": "mr-board", "value": "mr-board" }
+        ],
+        "query": "mr-board",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "MR Board 系统监控",
+  "uid": "mr-board-dashboard",
+  "version": 1,
+  "weekStart": ""
+}

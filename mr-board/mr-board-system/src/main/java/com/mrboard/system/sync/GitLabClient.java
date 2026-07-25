@@ -2,11 +2,17 @@ package com.mrboard.system.sync;
 
 import com.mrboard.system.sync.dto.CiDTO;
 import com.mrboard.system.sync.dto.ChangeDTO;
+import com.mrboard.system.sync.dto.CommentDTO;
 import com.mrboard.system.sync.dto.MrDTO;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -20,10 +26,18 @@ public class GitLabClient implements GitSyncClient {
     private final String apiBaseUrl;
     private final String accessToken;
 
-    public GitLabClient(String apiBaseUrl, String accessToken) {
-        this.restTemplate = new RestTemplate();
+    public GitLabClient(String apiBaseUrl, String accessToken, String proxyHost, Integer proxyPort) {
         this.apiBaseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.substring(0, apiBaseUrl.length() - 1) : apiBaseUrl;
         this.accessToken = accessToken;
+
+        if (proxyHost != null && proxyPort != null) {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setProxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort)));
+            this.restTemplate = new RestTemplate(factory);
+            log.info("GitLabClient using proxy {}:{}", proxyHost, proxyPort);
+        } else {
+            this.restTemplate = new RestTemplate();
+        }
     }
 
     @Override
@@ -238,6 +252,35 @@ public class GitLabClient implements GitSyncClient {
             case "canceled", "cancelled", "skipped" -> "canceled";
             default -> "unknown";
         };
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<CommentDTO> fetchComments(String projectPath, Long mrIid) {
+        List<CommentDTO> results = new ArrayList<>();
+        try {
+            String encodedPath = projectPath.replace("/", "%2F");
+            String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/notes?per_page=100";
+            ResponseEntity<List> response = restTemplate.exchange(url,
+                    org.springframework.http.HttpMethod.GET, createEntity(), List.class);
+            List<Map<String, Object>> notes = response.getBody();
+            if (notes != null) {
+                for (Map<String, Object> n : notes) {
+                    CommentDTO dto = new CommentDTO();
+                    dto.setPlatformCommentId(String.valueOf(n.get("id")));
+                    Map<String, Object> author = (Map<String, Object>) n.get("author");
+                    dto.setAuthorName(author != null ? (String) author.get("username") : "unknown");
+                    dto.setAuthorAvatar(author != null ? (String) author.get("avatar_url") : null);
+                    dto.setBody((String) n.get("body"));
+                    dto.setIsSystem(Boolean.TRUE.equals(n.get("system")));
+                    dto.setCreatedAt(parseDateTime((String) n.get("created_at")));
+                    results.add(dto);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch comments from GitLab: {}", e.getMessage());
+        }
+        return results;
     }
 
     private LocalDateTime parseDateTime(String value) {

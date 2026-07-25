@@ -1,6 +1,6 @@
 # ============================================================
 # MR Board System - Docker Compose
-# Phase 1 Infrastructure
+# 支持 nerdctl + 远程 BuildKit 构建
 # ============================================================
 
 version: '3.8'
@@ -17,7 +17,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./mr-board/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
@@ -42,7 +42,10 @@ services:
   backend:
     build:
       context: ./mr-board
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.backend
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: mr-board-backend:latest
     container_name: mr-board-backend
     restart: unless-stopped
     ports:
@@ -52,6 +55,10 @@ services:
       MYSQL_PASSWORD: MrBoard@2026
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-mr-board-access-secret-key-2026-07-25-very-long}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-mr-board-refresh-secret-key-2026-07-25-very-long}
+      # 同步代理配置（默认关闭；Windows Docker Desktop 访问宿主机代理请改为 host.docker.internal）
+      SYNC_PROXY_ENABLED: ${SYNC_PROXY_ENABLED:-false}
+      SYNC_PROXY_HOST: ${SYNC_PROXY_HOST:-127.0.0.1}
+      SYNC_PROXY_PORT: ${SYNC_PROXY_PORT:-7897}
     depends_on:
       mysql:
         condition: service_healthy
@@ -62,12 +69,34 @@ services:
     build:
       context: ./mr-board-frontend
       dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: mr-board-frontend:latest
     container_name: mr-board-frontend
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: mr-board-nginx
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
+      - frontend
       - backend
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   mysql_data:

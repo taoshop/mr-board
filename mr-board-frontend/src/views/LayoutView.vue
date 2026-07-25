@@ -31,7 +31,8 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                <el-dropdown-item command="profile">个人设置</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -46,13 +47,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
 
 const router = useRouter()
 const userStore = useUserStore()
+let ws: WebSocket | null = null
 
 const menuItems = computed(() => {
   const items = [
@@ -74,8 +76,72 @@ function handleCommand(command: string) {
     userStore.logout()
     ElMessage.success('已退出登录')
     router.push('/login')
+  } else if (command === 'profile') {
+    router.push('/profile')
   }
 }
+
+function connectWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/ws/sync`
+  ws = new WebSocket(wsUrl)
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.type === 'sync_started') {
+        ElNotification({
+          title: '同步开始',
+          message: `项目「${data.projectName || data.projectId}」正在同步...`,
+          type: 'info',
+          duration: 3000,
+        })
+      } else if (data.type === 'sync_completed') {
+        ElNotification({
+          title: '同步完成',
+          message: `项目「${data.projectName || data.projectId}」同步成功，处理 ${data.mrCount || 0} 个 MR`,
+          type: 'success',
+          duration: 5000,
+        })
+      } else if (data.type === 'sync_failed') {
+        ElNotification({
+          title: '同步失败',
+          message: `项目「${data.projectName || data.projectId}」同步失败：${data.errorMsg || '未知错误'}`,
+          type: 'error',
+          duration: 8000,
+        })
+      }
+    } catch {
+      // ignore invalid message
+    }
+  }
+
+  ws.onclose = () => {
+    // 5秒后重连
+    setTimeout(() => {
+      if (userStore.isLoggedIn) {
+        connectWebSocket()
+      }
+    }, 5000)
+  }
+}
+
+function disconnectWebSocket() {
+  if (ws) {
+    ws.close()
+    ws = null
+  }
+}
+
+onMounted(() => {
+  if (userStore.isLoggedIn) {
+    connectWebSocket()
+  }
+})
+
+onUnmounted(() => {
+  disconnectWebSocket()
+})
 </script>
 
 <style scoped lang="scss">
@@ -119,6 +185,12 @@ function handleCommand(command: string) {
 
 .main {
   background-color: #f0f2f5;
-  padding: 20px;
+  padding: 16px;
+}
+
+@media screen and (max-width: 1440px) {
+  .sidebar {
+    width: 200px !important;
+  }
 }
 </style>

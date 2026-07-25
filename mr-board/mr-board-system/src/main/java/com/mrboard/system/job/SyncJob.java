@@ -23,7 +23,7 @@ public class SyncJob implements Job {
         }
         log.info("Scheduled sync job started for git source {}", gitSourceId);
         try {
-            syncService.triggerSync(gitSourceId, false);
+            syncService.triggerSync(gitSourceId, false, "scheduled");
         } catch (Exception e) {
             log.error("Scheduled sync failed for git source {}: {}", gitSourceId, e.getMessage());
         }

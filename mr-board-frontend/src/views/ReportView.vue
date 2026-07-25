@@ -90,11 +90,13 @@ import {
   getReportOverview,
   getReportTrend,
   getReportDistribution,
-  exportExcel,
-  exportCsv,
+  submitAsyncExport,
+  getExportStatus,
+  downloadExportFile,
   type ReportOverview,
   type ReportTrend,
   type ReportDistribution,
+  type ExportTask,
 } from '@/api/report'
 
 // 时间维度
@@ -108,6 +110,9 @@ const trend = ref<ReportTrend | null>(null)
 const statusDist = ref<ReportDistribution | null>(null)
 const projectDist = ref<ReportDistribution | null>(null)
 const exporting = ref(false)
+
+const exportTaskId = ref<string | null>(null)
+let exportTimer: ReturnType<typeof setInterval> | null = null
 
 const trendEmpty = computed(() => !trend.value || trend.value.labels.length === 0)
 const statusEmpty = computed(() => !statusDist || statusDist.value?.labels.length === 0)
@@ -300,29 +305,58 @@ function renderProjectChart() {
   })
 }
 
-// 导出
-async function handleExportExcel() {
+// 异步导出
+function startExportPolling(taskId: string, filename: string) {
+  exportTaskId.value = taskId
   exporting.value = true
+  ElMessage.info('导出任务已提交，请稍候...')
+
+  exportTimer = setInterval(async () => {
+    try {
+      const res = await getExportStatus(taskId)
+      const task: ExportTask = res.data
+      if (task.status === 'COMPLETED') {
+        stopExportPolling()
+        const blob = await downloadExportFile(taskId)
+        downloadBlob(blob, filename)
+        ElMessage.success('导出成功')
+      } else if (task.status === 'FAILED') {
+        stopExportPolling()
+        ElMessage.error(task.errorMsg || '导出失败')
+      }
+      // PENDING / RUNNING 继续轮询
+    } catch {
+      stopExportPolling()
+      ElMessage.error('查询导出状态失败')
+    }
+  }, 2000)
+}
+
+function stopExportPolling() {
+  exporting.value = false
+  exportTaskId.value = null
+  if (exportTimer) {
+    clearInterval(exportTimer)
+    exportTimer = null
+  }
+}
+
+async function handleExportExcel() {
   try {
-    const blob = await exportExcel()
-    downloadBlob(blob, `MR列表_${new Date().toISOString().split('T')[0]}.xlsx`)
-    ElMessage.success('Excel 导出成功')
+    const res = await submitAsyncExport('excel')
+    startExportPolling(res.data.id, `MR列表_${new Date().toISOString().split('T')[0]}.xlsx`)
   } catch {
-    ElMessage.error('导出失败')
-  } finally {
+    ElMessage.error('提交导出任务失败')
     exporting.value = false
   }
 }
 
 async function handleExportCsv() {
-  exporting.value = true
   try {
-    const blob = await exportCsv()
-    downloadBlob(blob, `MR列表_${new Date().toISOString().split('T')[0]}.csv`)
-    ElMessage.success('CSV 导出成功')
+    const res = await submitAsyncExport('csv')
+    startExportPolling(res.data.id, `MR列表_${new Date().toISOString().split('T')[0]}.csv`)
   } catch {
-    ElMessage.error('导出失败')
-  } finally {
+    ElMessage.error('提交导出任务失败')
     exporting.value = false
   }
 }
@@ -355,6 +389,7 @@ onUnmounted(() => {
   trendChart?.dispose()
   statusChart?.dispose()
   projectChart?.dispose()
+  stopExportPolling()
 })
 
 watch(timeRange, () => {

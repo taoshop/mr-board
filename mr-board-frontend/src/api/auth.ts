@@ -9,6 +9,7 @@ export interface LoginResult {
   accessToken: string
   refreshToken: string
   expiresIn: number
+  firstLogin?: boolean
   user: {
     id: number
     username: string

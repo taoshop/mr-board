@@ -15,6 +15,7 @@ export const useUserStore = defineStore(
     const accessToken = ref(localStorage.getItem('accessToken') || '')
     const refreshToken = ref(localStorage.getItem('refreshToken') || '')
     const userInfo = ref<UserInfo | null>(null)
+    const mustChangePassword = ref(localStorage.getItem('mustChangePassword') === 'true')
 
     const isLoggedIn = computed(() => !!accessToken.value)
     const isAdmin = computed(() => userInfo.value?.roles?.includes('admin') || false)
@@ -35,6 +36,11 @@ export const useUserStore = defineStore(
       localStorage.setItem('userInfo', JSON.stringify(info))
     }
 
+    function setMustChangePassword(value: boolean) {
+      mustChangePassword.value = value
+      localStorage.setItem('mustChangePassword', String(value))
+    }
+
     function initFromStorage() {
       const stored = localStorage.getItem('userInfo')
       if (stored) {
@@ -50,20 +56,24 @@ export const useUserStore = defineStore(
       accessToken.value = ''
       refreshToken.value = ''
       userInfo.value = null
+      mustChangePassword.value = false
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userInfo')
+      localStorage.removeItem('mustChangePassword')
     }
 
     return {
       accessToken,
       refreshToken,
       userInfo,
+      mustChangePassword,
       isLoggedIn,
       isAdmin,
       canViewReport,
       setToken,
       setUserInfo,
+      setMustChangePassword,
       logout,
       initFromStorage,
     }

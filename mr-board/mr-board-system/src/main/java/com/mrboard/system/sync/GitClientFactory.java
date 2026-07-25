@@ -5,6 +5,7 @@ import com.mrboard.system.entity.GitSource;
 import com.mrboard.system.mapper.GitSourceMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -14,6 +15,15 @@ public class GitClientFactory {
 
     private final GitSourceMapper gitSourceMapper;
     private final AesUtil aesUtil;
+
+    @Value("${sync.proxy.enabled:false}")
+    private boolean proxyEnabled;
+
+    @Value("${sync.proxy.host:127.0.0.1}")
+    private String proxyHost;
+
+    @Value("${sync.proxy.port:7897}")
+    private int proxyPort;
 
     public GitSyncClient create(Long gitSourceId) {
         GitSource source = gitSourceMapper.selectById(gitSourceId);
@@ -34,9 +44,9 @@ public class GitClientFactory {
 
     public GitSyncClient create(Integer platformType, String apiBaseUrl, String token) {
         if (platformType == null || platformType == 1) {
-            return new GitLabClient(apiBaseUrl, token);
+            return new GitLabClient(apiBaseUrl, token, proxyHost, proxyEnabled ? proxyPort : null);
         } else if (platformType == 2) {
-            return new GitHubClient(apiBaseUrl, token);
+            return new GitHubClient(apiBaseUrl, token, proxyHost, proxyEnabled ? proxyPort : null);
         }
         throw new IllegalArgumentException("Unsupported platform type: " + platformType);
     }

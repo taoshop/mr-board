@@ -1,6 +1,9 @@
 package com.mrboard.system.controller;
 
 import com.mrboard.common.result.Result;
+import com.mrboard.system.export.ExportTask;
+import com.mrboard.system.export.ExportTaskManager;
+import com.mrboard.system.service.AsyncExportService;
 import com.mrboard.system.service.ReportService;
 import com.mrboard.system.vo.report.ReportDistributionVO;
 import com.mrboard.system.vo.report.ReportOverviewVO;
@@ -13,11 +16,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +35,8 @@ import java.util.Locale;
 public class ReportController {
 
     private final ReportService reportService;
+    private final AsyncExportService asyncExportService;
+    private final ExportTaskManager exportTaskManager;
 
     @Operation(summary = "概览指标", description = "支持周或月维度查询")
     @GetMapping("/overview")
@@ -104,5 +108,60 @@ public class ReportController {
         response.setContentType("text/csv;charset=UTF-8");
         response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
         reportService.exportCsv(response.getOutputStream());
+    }
+
+    @Operation(summary = "异步提交导出任务", description = "type: excel / csv")
+    @PostMapping("/export/async")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
+    public Result<ExportTask> exportAsync(@RequestParam String type) {
+        if (!"excel".equalsIgnoreCase(type) && !"csv".equalsIgnoreCase(type)) {
+            return Result.error(400, "不支持的导出类型");
+        }
+        ExportTask task = exportTaskManager.createTask(type.toLowerCase());
+        if ("excel".equalsIgnoreCase(type)) {
+            asyncExportService.exportExcelAsync(task.getId());
+        } else {
+            asyncExportService.exportCsvAsync(task.getId());
+        }
+        return Result.success(task);
+    }
+
+    @Operation(summary = "查询导出任务状态")
+    @GetMapping("/export/status/{taskId}")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
+    public Result<ExportTask> exportStatus(@PathVariable String taskId) {
+        ExportTask task = exportTaskManager.getTask(taskId);
+        if (task == null) {
+            return Result.error(404, "任务不存在");
+        }
+        return Result.success(task);
+    }
+
+    @Operation(summary = "下载导出的文件")
+    @GetMapping("/export/download/{taskId}")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
+    public void exportDownload(@PathVariable String taskId, HttpServletResponse response) throws IOException {
+        ExportTask task = exportTaskManager.getTask(taskId);
+        if (task == null || task.getFilePath() == null) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            response.getWriter().write("文件不存在");
+            return;
+        }
+        File file = new File(task.getFilePath());
+        if (!file.exists()) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            response.getWriter().write("文件不存在");
+            return;
+        }
+        String ext = "excel".equals(task.getType()) ? "xlsx" : "csv";
+        String fileName = URLEncoder.encode("MR列表_" + LocalDate.now() + "." + ext, StandardCharsets.UTF_8);
+        String contentType = "excel".equals(task.getType())
+                ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                : "text/csv;charset=UTF-8";
+        response.setContentType(contentType);
+        response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+        try (FileInputStream fis = new FileInputStream(file)) {
+            fis.transferTo(response.getOutputStream());
+        }
     }
 }

@@ -73,6 +73,7 @@ public class UserController {
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword() != null ? request.getPassword() : "Password123"));
+        user.setPasswordChanged(false);
         user.setEmail(request.getEmail());
         user.setDisplayName(request.getDisplayName());
         user.setAvatar(request.getAvatar());
@@ -106,6 +107,7 @@ public class UserController {
         user.setDepartment(request.getDepartment());
         if (request.getPassword() != null && !request.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setPasswordChanged(false);
         }
         userMapper.updateById(user);
 
@@ -116,6 +118,15 @@ public class UserController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(@Parameter(description = "用户ID") @PathVariable Long id) {
         userMapper.deleteById(id);
+        return Result.success();
+    }
+
+    @Operation(summary = "批量删除用户")
+    @DeleteMapping("/batch")
+    public Result<Void> batchDelete(@RequestParam List<Long> ids) {
+        if (ids != null && !ids.isEmpty()) {
+            userMapper.deleteBatchIds(ids);
+        }
         return Result.success();
     }
 

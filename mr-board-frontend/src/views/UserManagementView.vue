@@ -4,11 +4,15 @@
       <template #header>
         <div class="card-header">
           <span>用户管理</span>
-          <el-button type="primary" @click="handleAdd">新增用户</el-button>
+          <div class="header-actions">
+            <el-button type="danger" :disabled="!selectedRows.length" @click="handleBatchDelete">批量删除</el-button>
+            <el-button type="primary" @click="handleAdd">新增用户</el-button>
+          </div>
         </div>
       </template>
 
-      <el-table :data="userList" v-loading="loading" stripe>
+      <el-table :data="userList" v-loading="loading" stripe @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="displayName" label="显示名" />
@@ -66,6 +70,7 @@ const userList = ref([])
 const page = ref(1)
 const size = ref(20)
 const total = ref(0)
+const selectedRows = ref<any[]>([])
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('新增用户')
@@ -78,6 +83,24 @@ const form = reactive({
   email: '',
   displayName: '',
 })
+
+function handleSelectionChange(val: any[]) {
+  selectedRows.value = val
+}
+
+async function handleBatchDelete() {
+  const ids = selectedRows.value.map((row) => row.id)
+  if (!ids.length) return
+  try {
+    await ElMessageBox.confirm(`确认删除选中的 ${ids.length} 个用户？`, '提示', { type: 'warning' })
+    await request.delete('/admin/users/batch', { params: { ids: ids.join(',') } })
+    ElMessage.success('批量删除成功')
+    selectedRows.value = []
+    fetchUsers()
+  } catch {
+    // cancelled
+  }
+}
 
 async function fetchUsers() {
   loading.value = true
@@ -150,6 +173,10 @@ onMounted(fetchUsers)
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+  .header-actions {
+    display: flex;
+    gap: 10px;
   }
 }
 </style>

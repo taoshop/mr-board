@@ -2,12 +2,16 @@ package com.mrboard.system.sync;
 
 import com.mrboard.system.sync.dto.CiDTO;
 import com.mrboard.system.sync.dto.ChangeDTO;
+import com.mrboard.system.sync.dto.CommentDTO;
 import com.mrboard.system.sync.dto.MrDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -21,10 +25,18 @@ public class GitHubClient implements GitSyncClient {
     private final String apiBaseUrl;
     private final String accessToken;
 
-    public GitHubClient(String apiBaseUrl, String accessToken) {
-        this.restTemplate = new RestTemplate();
+    public GitHubClient(String apiBaseUrl, String accessToken, String proxyHost, Integer proxyPort) {
         this.apiBaseUrl = apiBaseUrl != null ? apiBaseUrl : "https://api.github.com";
         this.accessToken = accessToken;
+
+        if (proxyHost != null && proxyPort != null) {
+            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+            factory.setProxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort)));
+            this.restTemplate = new RestTemplate(factory);
+            log.info("GitHubClient using proxy {}:{}", proxyHost, proxyPort);
+        } else {
+            this.restTemplate = new RestTemplate();
+        }
     }
 
     @Override
@@ -234,6 +246,33 @@ public class GitHubClient implements GitSyncClient {
             };
         }
         return "running".equalsIgnoreCase(status) ? "running" : "pending";
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<CommentDTO> fetchComments(String projectPath, Long mrIid) {
+        List<CommentDTO> results = new ArrayList<>();
+        try {
+            String url = apiBaseUrl + "/repos/" + projectPath + "/issues/" + mrIid + "/comments?per_page=100";
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), List.class);
+            List<Map<String, Object>> comments = response.getBody();
+            if (comments != null) {
+                for (Map<String, Object> c : comments) {
+                    CommentDTO dto = new CommentDTO();
+                    dto.setPlatformCommentId(String.valueOf(c.get("id")));
+                    Map<String, Object> user = (Map<String, Object>) c.get("user");
+                    dto.setAuthorName(user != null ? (String) user.get("login") : "unknown");
+                    dto.setAuthorAvatar(user != null ? (String) user.get("avatar_url") : null);
+                    dto.setBody((String) c.get("body"));
+                    dto.setIsSystem(false);
+                    dto.setCreatedAt(parseDateTime((String) c.get("created_at")));
+                    results.add(dto);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch comments from GitHub: {}", e.getMessage());
+        }
+        return results;
     }
 
     private LocalDateTime parseDateTime(String value) {

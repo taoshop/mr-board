@@ -50,3 +50,27 @@ export function exportCsv() {
     responseType: 'blob',
   }) as Promise<Blob>
 }
+
+export interface ExportTask {
+  id: string
+  type: string
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  filePath?: string
+  errorMsg?: string
+  createdAt: string
+  completedAt?: string
+}
+
+export function submitAsyncExport(type: 'excel' | 'csv') {
+  return request.post('/reports/export/async', null, { params: { type } }) as Promise<{ data: ExportTask }>
+}
+
+export function getExportStatus(taskId: string) {
+  return request.get(`/reports/export/status/${taskId}`) as Promise<{ data: ExportTask }>
+}
+
+export function downloadExportFile(taskId: string) {
+  return request.get(`/reports/export/download/${taskId}`, {
+    responseType: 'blob',
+  }) as Promise<Blob>
+}

@@ -14,8 +14,8 @@ import com.mrboard.system.vo.report.ReportTrendVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import jakarta.servlet.ServletOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.math.BigDecimal;
@@ -162,7 +162,7 @@ public class ReportService {
     /**
      * Excel 流式导出
      */
-    public void exportExcel(ServletOutputStream outputStream) throws IOException {
+    public void exportExcel(OutputStream outputStream) throws IOException {
         com.alibaba.excel.ExcelWriter writer = com.alibaba.excel.EasyExcel
                 .write(outputStream, MrExportDTO.class)
                 .build();
@@ -192,7 +192,7 @@ public class ReportService {
     /**
      * CSV 导出（UTF-8 BOM）
      */
-    public void exportCsv(ServletOutputStream outputStream) throws IOException {
+    public void exportCsv(OutputStream outputStream) throws IOException {
         // UTF-8 BOM
         outputStream.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
         try (Writer w = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8)) {

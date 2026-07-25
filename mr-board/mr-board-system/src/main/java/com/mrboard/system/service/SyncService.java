@@ -3,17 +3,22 @@ package com.mrboard.system.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mrboard.system.entity.CiJob;
+import com.mrboard.system.entity.MrComment;
 import com.mrboard.system.entity.Mrs;
 import com.mrboard.system.entity.Project;
 import com.mrboard.system.entity.SyncLog;
 import com.mrboard.system.mapper.CiJobMapper;
+import com.mrboard.system.mapper.MrCommentMapper;
 import com.mrboard.system.mapper.MrsMapper;
 import com.mrboard.system.mapper.ProjectMapper;
 import com.mrboard.system.mapper.SyncLogMapper;
 import com.mrboard.system.sync.GitClientFactory;
 import com.mrboard.system.sync.GitSyncClient;
 import com.mrboard.system.sync.dto.CiDTO;
+import com.mrboard.system.sync.dto.CommentDTO;
 import com.mrboard.system.sync.dto.MrDTO;
+import com.mrboard.system.websocket.SyncStatusMessage;
+import com.mrboard.system.websocket.SyncWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,11 +37,13 @@ public class SyncService {
     private final ProjectMapper projectMapper;
     private final MrsMapper mrsMapper;
     private final CiJobMapper ciJobMapper;
+    private final MrCommentMapper commentMapper;
     private final SyncLogMapper syncLogMapper;
     private final BoardStatusCalculator boardStatusCalculator;
+    private final SyncWebSocketHandler syncWebSocketHandler;
 
     @Transactional(rollbackFor = Exception.class)
-    public void triggerSync(Long gitSourceId, boolean full) {
+    public void triggerSync(Long gitSourceId, boolean full, String triggerType) {
         LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Project::getGitSourceId, gitSourceId).eq(Project::getIsActive, 1);
         List<Project> projects = projectMapper.selectList(wrapper);
@@ -46,7 +53,7 @@ public class SyncService {
                     project.setLastSyncAt(null);
                     projectMapper.updateById(project);
                 }
-                syncProject(project.getId());
+                syncProject(project.getId(), triggerType);
             } catch (Exception e) {
                 log.error("Trigger sync failed for project {}: {}", project.getId(), e.getMessage());
             }
@@ -54,7 +61,7 @@ public class SyncService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public SyncLog syncProject(Long projectId) {
+    public SyncLog syncProject(Long projectId, String triggerType) {
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
             throw new IllegalArgumentException("Project not found: " + projectId);
@@ -64,9 +71,20 @@ public class SyncService {
         logRecord.setProjectId(projectId);
         logRecord.setGitSourceId(project.getGitSourceId());
         logRecord.setSyncType("incremental");
+        logRecord.setTriggerType(triggerType);
         logRecord.setStatus("running");
         logRecord.setCreatedAt(LocalDateTime.now());
         syncLogMapper.insert(logRecord);
+
+        // WebSocket 推送：同步开始
+        syncWebSocketHandler.broadcastSyncStatus(SyncStatusMessage.builder()
+                .type("sync_started")
+                .projectId(projectId)
+                .gitSourceId(project.getGitSourceId())
+                .projectName(project.getName())
+                .status("running")
+                .timestamp(LocalDateTime.now().toString())
+                .build());
 
         int mrCount = 0;
         int ciCount = 0;
@@ -82,13 +100,23 @@ public class SyncService {
 
             List<MrDTO> mrList = client.fetchMRs(project.getProjectPath(), null, updatedAfter);
             for (MrDTO dto : mrList) {
-                saveOrUpdateMr(projectId, dto);
+                Mrs savedMr = saveOrUpdateMr(projectId, dto);
                 mrCount++;
 
                 List<CiDTO> ciList = client.fetchCI(project.getProjectPath(), dto.getPlatformMrId());
                 for (CiDTO ci : ciList) {
                     saveOrUpdateCi(projectId, dto.getPlatformMrId(), ci);
                     ciCount++;
+                }
+
+                // Fetch and cache MR comments
+                try {
+                    List<CommentDTO> comments = client.fetchComments(project.getProjectPath(), dto.getPlatformMrId());
+                    for (CommentDTO c : comments) {
+                        saveOrUpdateComment(savedMr.getId(), c);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to fetch comments for MR {} in project {}: {}", dto.getPlatformMrId(), projectId, e.getMessage());
                 }
             }
 
@@ -112,10 +140,25 @@ public class SyncService {
         logRecord.setCiCount(ciCount);
         logRecord.setFinishedAt(LocalDateTime.now());
         syncLogMapper.updateById(logRecord);
+
+        // WebSocket 推送：同步完成/失败
+        String finalType = "success".equals(logRecord.getStatus()) ? "sync_completed" : "sync_failed";
+        syncWebSocketHandler.broadcastSyncStatus(SyncStatusMessage.builder()
+                .type(finalType)
+                .projectId(projectId)
+                .gitSourceId(project.getGitSourceId())
+                .projectName(project.getName())
+                .status(logRecord.getStatus())
+                .mrCount(mrCount)
+                .ciCount(ciCount)
+                .errorMsg(errorMsg)
+                .timestamp(LocalDateTime.now().toString())
+                .build());
+
         return logRecord;
     }
 
-    private void saveOrUpdateMr(Long projectId, MrDTO dto) {
+    private Mrs saveOrUpdateMr(Long projectId, MrDTO dto) {
         LambdaQueryWrapper<Mrs> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Mrs::getProjectId, projectId)
                 .eq(Mrs::getPlatformMrId, dto.getPlatformMrId());
@@ -157,8 +200,33 @@ public class SyncService {
         if (existing != null) {
             entity.setId(existing.getId());
             mrsMapper.updateById(entity);
+            return entity;
         } else {
             mrsMapper.insert(entity);
+            return entity;
+        }
+    }
+
+    private void saveOrUpdateComment(Long mrId, CommentDTO dto) {
+        LambdaQueryWrapper<MrComment> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(MrComment::getMrId, mrId)
+                .eq(MrComment::getPlatformCommentId, dto.getPlatformCommentId());
+        MrComment existing = commentMapper.selectOne(wrapper);
+
+        MrComment entity = new MrComment();
+        entity.setMrId(mrId);
+        entity.setPlatformCommentId(dto.getPlatformCommentId());
+        entity.setAuthorName(dto.getAuthorName());
+        entity.setAuthorAvatar(dto.getAuthorAvatar());
+        entity.setBody(dto.getBody());
+        entity.setIsSystem(Boolean.TRUE.equals(dto.getIsSystem()) ? 1 : 0);
+        entity.setCreatedAt(dto.getCreatedAt());
+
+        if (existing != null) {
+            entity.setId(existing.getId());
+            commentMapper.updateById(entity);
+        } else {
+            commentMapper.insert(entity);
         }
     }
 

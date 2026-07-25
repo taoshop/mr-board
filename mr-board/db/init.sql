@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
     avatar          VARCHAR(255) COMMENT '头像URL',
     department      VARCHAR(64)  COMMENT '部门',
     platform_username VARCHAR(64) COMMENT 'Git平台关联用户名',
+    password_changed  TINYINT DEFAULT 0 COMMENT '是否已修改初始密码：0=否, 1=是',
     deleted         TINYINT DEFAULT 0 COMMENT '逻辑删除：0=正常, 1=删除',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -125,8 +126,8 @@ WHERE r.code = 'reviewer' AND p.code IN ('menu:dashboard','mr:read');
 -- Admin user (password: Admin@123)
 -- NOTE: The password below is a valid bcrypt hash for "Admin@123".
 -- If you need to regenerate, run: java com.mrboard.system.utils.PasswordGenerator Admin@123
-INSERT INTO users (username, password, email, display_name, department)
-VALUES ('admin', '$2b$12$1SoJpIKAddiHEGWf8mQlK.r7mePkVN2csHGu3TsnJX9xA7aZ84gju', 'admin@mrboard.com', '系统管理员', '技术部');
+INSERT INTO users (username, password, email, display_name, department, password_changed)
+VALUES ('admin', '$2b$12$1SoJpIKAddiHEGWf8mQlK.r7mePkVN2csHGu3TsnJX9xA7aZ84gju', 'admin@mrboard.com', '系统管理员', '技术部', 1);
 
 -- Link admin user to admin role
 INSERT INTO user_roles (user_id, role_id)
@@ -145,6 +146,7 @@ CREATE TABLE IF NOT EXISTS git_sources (
     platform_type   TINYINT      NOT NULL COMMENT '平台类型：1=GitLab, 2=GitHub',
     api_base_url    VARCHAR(255) NOT NULL COMMENT 'API基础地址',
     access_token    VARCHAR(512) NOT NULL COMMENT '访问令牌（AES加密）',
+    webhook_secret  VARCHAR(256) COMMENT 'Webhook签名密钥',
     sync_cron       VARCHAR(32)  DEFAULT '0 */5 * * * ?' COMMENT '同步CRON表达式',
     is_active       TINYINT      DEFAULT 1 COMMENT '是否启用：1=是, 0=否',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -288,3 +290,39 @@ CREATE TABLE IF NOT EXISTS mr_status_history (
     INDEX idx_mr_id (mr_id),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='MR状态变更历史表';
+
+-- ------------------------------------------------------------
+-- Table: report_daily_summary（结构与 db/V4.1 迁移脚本保持一致）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS report_daily_summary (
+    summary_date     DATE NOT NULL COMMENT '统计日期',
+    project_id       BIGINT NOT NULL COMMENT '项目ID',
+    created_count    INT DEFAULT 0 COMMENT '当日新建MR数',
+    merged_count     INT DEFAULT 0 COMMENT '当日合并MR数',
+    closed_count     INT DEFAULT 0 COMMENT '当日关闭MR数',
+    avg_merge_hours  DECIMAL(10,2) COMMENT '当日合并MR的平均耗时（小时）',
+    ci_success_count INT DEFAULT 0 COMMENT '当日CI成功次数',
+    ci_failed_count  INT DEFAULT 0 COMMENT '当日CI失败次数',
+    conflict_count   INT DEFAULT 0 COMMENT '当日存在冲突的MR数',
+
+    PRIMARY KEY (summary_date, project_id),
+    INDEX idx_summary_date (summary_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='MR日报统计汇总表';
+
+-- ------------------------------------------------------------
+-- Table: mr_comments（MR评论缓存）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mr_comments (
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '评论ID',
+    mr_id               BIGINT       NOT NULL COMMENT '关联的MR主键ID',
+    platform_comment_id VARCHAR(64)  NOT NULL COMMENT '平台评论ID',
+    author_name         VARCHAR(64)  NOT NULL COMMENT '评论者平台用户名',
+    author_avatar       VARCHAR(255) COMMENT '评论者头像URL',
+    body                TEXT         NOT NULL COMMENT '评论内容',
+    is_system           TINYINT      DEFAULT 0 COMMENT '是否系统评论：0=否, 1=是',
+    created_at          DATETIME     NOT NULL COMMENT '平台创建时间',
+    local_updated_at    DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '本地记录更新时间',
+    UNIQUE KEY uk_mr_comment (mr_id, platform_comment_id),
+    INDEX idx_mr_id (mr_id),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='MR评论缓存表';

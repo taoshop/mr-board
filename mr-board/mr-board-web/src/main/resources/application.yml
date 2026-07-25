@@ -51,6 +51,8 @@ spring:
           max-active: 8
           max-idle: 8
           min-idle: 0
+  flyway:
+    enabled: false
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
@@ -69,6 +71,12 @@ jwt:
   access-secret: ${JWT_ACCESS_SECRET:mr-board-access-secret-key-2026-07-25-very-long}
   refresh-secret: ${JWT_REFRESH_SECRET:mr-board-refresh-secret-key-2026-07-25-very-long}
 
+sync:
+  proxy:
+    enabled: ${SYNC_PROXY_ENABLED:false}
+    host: ${SYNC_PROXY_HOST:127.0.0.1}
+    port: ${SYNC_PROXY_PORT:7897}
+
 logging:
   level:
     root: info
@@ -84,7 +92,7 @@ spring:
   datasource:
     url: jdbc:mysql://mysql:3306/mr_board?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: ${MYSQL_PASSWORD}
+    password: mrboard123
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
@@ -92,6 +100,8 @@ spring:
       port: 6379
       password: ${REDIS_PASSWORD:}
       database: 0
+  flyway:
+    enabled: false
 
 mybatis-plus:
   configuration:

@@ -3,6 +3,7 @@ package com.mrboard.system.controller;
 import com.mrboard.common.result.Result;
 import com.mrboard.common.utils.JwtUtil;
 import com.mrboard.system.dto.LoginRequest;
+import com.mrboard.system.dto.ProfileUpdateRequest;
 import com.mrboard.system.dto.LoginResponse;
 import com.mrboard.system.entity.Permission;
 import com.mrboard.system.entity.Role;
@@ -86,6 +87,7 @@ public class AuthController {
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
                     .expiresIn(7200L)
+                    .firstLogin(user.getPasswordChanged() == null || !user.getPasswordChanged())
                     .user(userInfo)
                     .build());
         } catch (Exception e) {
@@ -155,6 +157,48 @@ public class AuthController {
         return Result.success(userInfo);
     }
 
+    @Operation(summary = "更新当前登录用户资料")
+    @PutMapping("/profile")
+    public Result<Void> updateProfile(@RequestBody ProfileUpdateRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String userIdStr = authentication.getName();
+        Long userId = Long.valueOf(userIdStr);
+
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return Result.error(1001, "用户不存在");
+        }
+
+        if (request.getDisplayName() != null) {
+            user.setDisplayName(request.getDisplayName());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail());
+        }
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar());
+        }
+        if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setPasswordChanged(true);
+        }
+        userMapper.updateById(user);
+        return Result.success();
+    }
+
+    @Operation(summary = "获取当前登录用户完整资料")
+    @GetMapping("/profile")
+    public Result<User> getProfile() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String userIdStr = authentication.getName();
+        Long userId = Long.valueOf(userIdStr);
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return Result.error(1001, "用户不存在");
+        }
+        user.setPassword(null);
+        return Result.success(user);
+    }
     private void incrementFailCount(String key) {
         Long count = redisTemplate.opsForValue().increment(key);
         if (count != null && count == 1) {

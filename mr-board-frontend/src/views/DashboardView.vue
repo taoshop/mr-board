@@ -19,7 +19,14 @@
       <el-button type="primary" :icon="Refresh" @click="fetchBoard">刷新</el-button>
     </div>
 
-    <div class="kanban-board" v-loading="loading">
+    <!-- 骨架屏：初始加载时展示 -->
+    <div v-if="initialLoading" class="skeleton-board">
+      <div v-for="i in 7" :key="i" class="skeleton-column">
+        <el-skeleton :rows="3" animated />
+      </div>
+    </div>
+
+    <div v-else class="kanban-board" v-loading="loading">
       <div
         v-for="col in columns"
         :key="col.key"
@@ -138,6 +145,22 @@
               </el-timeline-item>
             </el-timeline>
           </el-tab-pane>
+
+          <!-- 评论 -->
+          <el-tab-pane label="评论" name="comments">
+            <el-empty v-if="!comments.length" description="暂无评论" />
+            <div v-else class="comments-list">
+              <div v-for="c in comments" :key="c.id" class="comment-item">
+                <div class="comment-header">
+                  <el-avatar :size="28" :src="c.authorAvatar" />
+                  <span class="comment-author">{{ c.authorName }}</span>
+                  <el-tag v-if="c.isSystem" size="small" type="info">系统</el-tag>
+                  <span class="comment-time">{{ c.createdAt }}</span>
+                </div>
+                <div class="comment-body" v-html="c.body"></div>
+              </div>
+            </div>
+          </el-tab-pane>
         </el-tabs>
       </div>
     </el-drawer>
@@ -148,8 +171,8 @@
 import { ref, onMounted, reactive, onUnmounted, computed } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
-import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges } from '@/api/board'
-import type { CiJob, StatusHistory, ChangeItem } from '@/api/board'
+import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges, getMrComments } from '@/api/board'
+import type { CiJob, StatusHistory, ChangeItem, CommentItem } from '@/api/board'
 import { useUserStore } from '@/stores/user'
 import MrCard from '@/components/MrCard.vue'
 import CiStatusIcon from '@/components/CiStatusIcon.vue'
@@ -184,6 +207,7 @@ interface ProjectOption {
 
 const userStore = useUserStore()
 const loading = ref(false)
+const initialLoading = ref(true)
 const columns = ref<Column[]>([])
 const boardData = ref<Record<string, Mr[]>>({})
 const projects = ref<ProjectOption[]>([])
@@ -201,6 +225,7 @@ const selectedMr = ref<Mr | null>(null)
 const ciJobs = ref<CiJob[]>([])
 const changes = ref<ChangeItem[]>([])
 const statusHistory = ref<StatusHistory[]>([])
+const comments = ref<CommentItem[]>([])
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
 const AUTO_REFRESH_INTERVAL = 60_000
@@ -301,6 +326,7 @@ async function fetchBoard() {
     ElMessage.error('获取看板数据失败')
   } finally {
     loading.value = false
+    initialLoading.value = false
   }
 }
 
@@ -327,10 +353,12 @@ async function openDetail(mr: Mr) {
   ciJobs.value = []
   changes.value = []
   statusHistory.value = []
+  comments.value = []
   try {
-    const [detailRes, changesRes] = await Promise.all([
+    const [detailRes, changesRes, commentsRes] = await Promise.all([
       getMrDetail(mr.id),
       getMrChanges(mr.id),
+      getMrComments(mr.id),
     ])
     if (detailRes.code === 200) {
       const data = detailRes.data
@@ -339,6 +367,9 @@ async function openDetail(mr: Mr) {
     }
     if (changesRes.code === 200) {
       changes.value = changesRes.data || []
+    }
+    if (commentsRes.code === 200) {
+      comments.value = commentsRes.data || []
     }
   } catch (e) {
     ElMessage.error('加载详情失败')
@@ -503,6 +534,22 @@ onUnmounted(() => {
     flex-wrap: wrap;
   }
 
+  .skeleton-board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+
+    .skeleton-column {
+      flex: 0 0 300px;
+      background: #fff;
+      border-radius: 6px;
+      border-top: 4px solid #e4e7ed;
+      padding: 16px;
+      max-height: calc(100vh - 200px);
+    }
+  }
+
   .kanban-board {
     display: flex;
     gap: 12px;
@@ -518,6 +565,18 @@ onUnmounted(() => {
       flex-direction: column;
       max-height: calc(100vh - 200px);
       transition: box-shadow 0.2s;
+
+      @media screen and (max-width: 1600px) {
+        flex: 0 0 260px;
+      }
+
+      @media screen and (max-width: 1440px) {
+        flex: 0 0 240px;
+      }
+
+      @media screen and (max-width: 1280px) {
+        flex: 0 0 220px;
+      }
 
       &.drag-over {
         box-shadow: 0 0 0 2px #409eff;
@@ -552,6 +611,43 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+}
+
+.comments-list {
+  .comment-item {
+    padding: 12px 0;
+    border-bottom: 1px solid #ebeef5;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .comment-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+
+      .comment-author {
+        font-weight: 600;
+        font-size: 13px;
+      }
+
+      .comment-time {
+        font-size: 12px;
+        color: #909399;
+        margin-left: auto;
+      }
+    }
+
+    .comment-body {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #303133;
+      margin-left: 36px;
+      word-break: break-word;
+    }
   }
 }
 </style>
