@@ -221,9 +221,9 @@ public class GitHubClient implements GitSyncClient {
         if (base != null) {
             dto.setTargetBranch((String) base.get("ref"));
         }
-        dto.setPlatformStatus((String) pr.get("state"));
+        dto.setPlatformStatus(mapGitHubState(pr));
         dto.setHasConflict(false);
-        dto.setMergeable("open".equals(pr.get("state")));
+        dto.setMergeable(!"closed".equals(pr.get("state")));
         dto.setChangesCount(0);
         dto.setAdditions(0);
         dto.setDeletions(0);
@@ -234,6 +234,15 @@ public class GitHubClient implements GitSyncClient {
         dto.setMergedAt(parseDateTime((String) pr.get("merged_at")));
         dto.setClosedAt(parseDateTime((String) pr.get("closed_at")));
         return dto;
+    }
+
+    /** 区分 GitHub PR 的 merged 和 closed 状态 */
+    private String mapGitHubState(Map<String, Object> pr) {
+        String state = (String) pr.get("state");
+        if ("closed".equals(state) && pr.get("merged_at") != null) {
+            return "merged";
+        }
+        return state;
     }
 
     private String mapCiStatus(String status, String conclusion) {

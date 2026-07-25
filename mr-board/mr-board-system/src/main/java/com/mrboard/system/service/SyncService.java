@@ -126,7 +126,8 @@ public class SyncService {
                     ? lastSync.format(DateTimeFormatter.ISO_DATE_TIME) + "Z"
                     : null;
 
-            List<MrDTO> mrList = client.fetchMRs(project.getProjectPath(), null, updatedAfter);
+            // state="all" 确保同时获取 open / closed / merged 状态的 MR
+            List<MrDTO> mrList = client.fetchMRs(project.getProjectPath(), "all", updatedAfter);
             for (MrDTO dto : mrList) {
                 Mrs savedMr = saveOrUpdateMr(projectId, dto);
                 mrCount++;
