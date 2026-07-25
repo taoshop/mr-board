@@ -238,15 +238,15 @@ function canDrop(mr: Mr, targetStatus: string): string | null {
 
 async function fetchColumns() {
   const res = await getColumns()
-  if (res.data.code === 200) {
-    columns.value = res.data.data
+  if (res.code === 200) {
+    columns.value = res.data
   }
 }
 
 async function fetchProjects() {
   const res = await getProjects()
-  if (res.data.code === 200) {
-    projects.value = res.data.data
+  if (res.code === 200) {
+    projects.value = res.data
   }
 }
 
@@ -292,8 +292,8 @@ async function fetchBoard() {
     if (filters.author) params.author = filters.author
     if (filters.branch) params.branch = filters.branch
     const res = await getBoard(params)
-    if (res.data.code === 200) {
-      const newData = res.data.data
+    if (res.code === 200) {
+      const newData = res.data
       checkStatusChange(newData)
       boardData.value = newData
     }
@@ -332,13 +332,13 @@ async function openDetail(mr: Mr) {
       getMrDetail(mr.id),
       getMrChanges(mr.id),
     ])
-    if (detailRes.data.code === 200) {
-      const data = detailRes.data.data
+    if (detailRes.code === 200) {
+      const data = detailRes.data
       ciJobs.value = data.ciJobs || []
       statusHistory.value = data.statusHistory || []
     }
-    if (changesRes.data.code === 200) {
-      changes.value = changesRes.data.data || []
+    if (changesRes.code === 200) {
+      changes.value = changesRes.data || []
     }
   } catch (e) {
     ElMessage.error('加载详情失败')
@@ -404,7 +404,7 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
 
   try {
     const res = await updateMrStatus(mr.id, targetStatus)
-    if (res.data.code !== 200) {
+    if (res.code !== 200) {
       throw new Error(res.data.msg || '状态更新失败')
     }
     ElMessage.success('状态更新成功')

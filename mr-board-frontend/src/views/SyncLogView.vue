@@ -81,10 +81,10 @@ async function fetchLogs() {
   loading.value = true
   try {
     const params = { ...query }
-    const res = await request.get('/api/admin/sync/logs', { params })
-    if (res.data.code === 200) {
-      logs.value = res.data.data.records
-      total.value = res.data.data.total
+    const res: any = await request.get('/admin/sync/logs', { params })
+    if (res.code === 200) {
+      logs.value = res.data.records
+      total.value = res.data.total
     }
   } catch (e) {
     ElMessage.error('获取同步日志失败')
@@ -94,9 +94,9 @@ async function fetchLogs() {
 }
 
 async function fetchProjects() {
-  const res = await request.get('/api/projects')
-  if (res.data.code === 200) {
-    projects.value = res.data.data
+  const res: any = await request.get('/projects')
+  if (res.code === 200) {
+    projects.value = res.data
   }
 }
 

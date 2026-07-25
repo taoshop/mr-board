@@ -81,9 +81,9 @@ const form = reactive<Partial<GitSource>>({
 async function fetchList() {
   loading.value = true
   try {
-    const res = await request.get('/api/admin/git-sources', { params: { page: 1, size: 1000 } })
-    if (res.data.code === 200) {
-      list.value = res.data.data.records || res.data.data
+    const res: any = await request.get('/admin/git-sources', { params: { page: 1, size: 1000 } })
+    if (res.code === 200) {
+      list.value = res.data.records || res.data
     }
   } catch (e) {
     ElMessage.error('获取列表失败')
@@ -102,15 +102,15 @@ function openDialog(row?: GitSource) {
 }
 
 async function handleSave() {
-  if (!form.name || !form.apiBaseUrl) {
+  if (!form.name || !form.apiBaseUrl || (!form.id && !form.accessToken)) {
     ElMessage.warning('请填写必填项')
     return
   }
   try {
     if (form.id) {
-      await request.put(`/api/admin/git-sources/${form.id}`, form)
+      await request.put(`/admin/git-sources/${form.id}`, form)
     } else {
-      await request.post('/api/admin/git-sources', form)
+      await request.post('/admin/git-sources', form)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
@@ -123,7 +123,7 @@ async function handleSave() {
 async function handleDelete(id: number) {
   try {
     await ElMessageBox.confirm('确定删除该 Git 源？', '提示', { type: 'warning' })
-    await request.delete(`/api/admin/git-sources/${id}`)
+    await request.delete(`/admin/git-sources/${id}`)
     ElMessage.success('删除成功')
     fetchList()
   } catch (e) {
@@ -133,8 +133,8 @@ async function handleDelete(id: number) {
 
 async function testConnection(id: number) {
   try {
-    const res = await request.post(`/api/admin/git-sources/${id}/test`)
-    if (res.data.code === 200 && res.data.data) {
+    const res: any = await request.post(`/admin/git-sources/${id}/test`)
+    if (res.code === 200 && res.data) {
       ElMessage.success('连接成功')
     } else {
       ElMessage.error('连接失败')

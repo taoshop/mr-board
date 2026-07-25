@@ -69,7 +69,7 @@ export interface CiJob {
 }
 
 export function getColumns() {
-  return request.get('/api/board/columns')
+  return request.get('/board/columns') as Promise<any>
 }
 
 export function getBoard(params?: {
@@ -78,29 +78,29 @@ export function getBoard(params?: {
   author?: string
   branch?: string
 }) {
-  return request.get('/api/board', { params })
+  return request.get('/board', { params }) as Promise<any>
 }
 
 export function getProjects(gitSourceId?: number) {
-  return request.get('/api/projects', { params: { gitSourceId } })
+  return request.get('/projects', { params: { gitSourceId } }) as Promise<any>
 }
 
 export function getMrCi(id: number) {
-  return request.get(`/api/board/mr/${id}/ci`)
+  return request.get(`/board/mr/${id}/ci`) as Promise<any>
 }
 
 export function getMrList(params?: MrPageParams) {
-  return request.get('/api/mrs', { params })
+  return request.get('/mrs', { params }) as Promise<any>
 }
 
 export function getMrDetail(id: number) {
-  return request.get(`/api/mrs/${id}`)
+  return request.get(`/mrs/${id}`) as Promise<any>
 }
 
 export function getMrChanges(id: number) {
-  return request.get(`/api/mrs/${id}/changes`)
+  return request.get(`/mrs/${id}/changes`) as Promise<any>
 }
 
 export function updateMrStatus(id: number, boardStatus: string) {
-  return request.put(`/api/mrs/${id}/status`, { boardStatus })
+  return request.put(`/mrs/${id}/status`, { boardStatus }) as Promise<any>
 }
