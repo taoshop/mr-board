@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @TableName("users")
@@ -30,4 +31,8 @@ public class User {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
+
+    /** 用户角色列表（非数据库字段，查询时填充） */
+    @TableField(exist = false)
+    private List<String> roles;
 }
