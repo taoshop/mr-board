@@ -24,10 +24,10 @@
               <el-icon class="is-loading"><Loading /></el-icon> 同步中...
             </span>
             <span v-else-if="lastSyncResult[row.id]">
-              <el-tag :type="lastSyncResult[row.id].ok ? 'success' : 'danger'" size="small">
-                {{ lastSyncResult[row.id].ok ? '已完成' : '失败' }}
+              <el-tag :type="lastSyncResult[row.id].ok ? 'success' : 'danger'" size="small" style="margin-right: 6px">
+                {{ lastSyncResult[row.id].ok ? '成功' : '失败' }}
               </el-tag>
-              <span v-if="lastSyncResult[row.id].mrCount != null" style="margin-left: 6px; font-size: 12px; color: #909399">
+              <span v-if="lastSyncResult[row.id].mrCount != null && lastSyncResult[row.id].ok" style="font-size: 12px; color: #909399">
                 MR:{{ lastSyncResult[row.id].mrCount }} CI:{{ lastSyncResult[row.id].ciCount }}
               </span>
             </span>
@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
-import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 
@@ -107,7 +107,6 @@ interface SyncResult {
   ok: boolean
   mrCount?: number
   ciCount?: number
-  error?: string
 }
 
 const loading = ref(false)
@@ -129,11 +128,36 @@ async function fetchList() {
     const res: any = await request.get('/admin/git-sources', { params: { page: 1, size: 1000 } })
     if (res.code === 200) {
       list.value = res.data.records || res.data
+      // 刷新后恢复最近同步结果
+      for (const src of list.value) {
+        loadLastSyncResult(src.id)
+      }
     }
-  } catch (e) {
+  } catch {
     ElMessage.error('获取列表失败')
   } finally {
     loading.value = false
+  }
+}
+
+/** 从 API 加载每个 Git 源的最近同步结果（解决刷新后丢失） */
+async function loadLastSyncResult(gitSourceId: number) {
+  try {
+    const res: any = await request.get('/admin/sync/logs', {
+      params: { gitSourceId, page: 1, size: 1 },
+    })
+    if (res.code === 200 && res.data?.records?.length > 0) {
+      const latest = res.data.records[0]
+      if (latest.status !== 'running') {
+        lastSyncResult[gitSourceId] = {
+          ok: latest.status === 'success',
+          mrCount: latest.mrCount,
+          ciCount: latest.ciCount,
+        }
+      }
+    }
+  } catch {
+    // 静默失败，不影响列表加载
   }
 }
 
@@ -163,11 +187,12 @@ async function handleSave() {
     } else {
       await request.post('/admin/git-sources', { ...form, projectPaths })
     }
-    ElNotification({ title: 'Git 源保存成功', message: `项目将按 Cron 周期自动同步 MR`, type: 'success' })
+    ElMessage.success('保存成功，项目将按 Cron 周期自动同步 MR')
     dialogVisible.value = false
     fetchList()
   } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message || err?.message || '保存失败')
+    // 拦截器已统一弹错误，此处补充场景提示
+    ElMessage.error(err?.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -180,21 +205,12 @@ async function handleSync(id: number) {
   try {
     const res: any = await request.post(`/admin/git-sources/${id}/sync`, null, { params: { type: 'full' } })
     if (res.code === 200) {
-      ElNotification({
-        title: '同步任务已触发',
-        message: '全量同步已启动，正在拉取 Git 平台数据...',
-        type: 'info',
-        duration: 3000,
-      })
-      // 轮询同步状态
+      ElMessage.success(res.data || '同步任务已触发')
       await pollSyncStatus(id)
-    } else {
-      lastSyncResult[id] = { ok: false, error: res.message }
-      ElMessage.error(res.message || '同步触发失败')
     }
   } catch (err: any) {
-    lastSyncResult[id] = { ok: false, error: err?.message }
-    ElMessage.error(err?.response?.data?.message || err?.message || '同步触发失败')
+    lastSyncResult[id] = { ok: false }
+    ElMessage.error(err?.message || '同步触发失败')
   } finally {
     syncingMap[id] = false
   }
@@ -204,38 +220,26 @@ async function pollSyncStatus(gitSourceId: number, maxAttempts = 30, intervalMs 
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, intervalMs))
     try {
-      const res: any = await request.get('/admin/sync/logs', {
-        params: { gitSourceId, page: 1, size: 1 },
-      })
+      const res: any = await request.get('/admin/sync/logs', { params: { gitSourceId, page: 1, size: 1 } })
       if (res.code === 200 && res.data?.records?.length > 0) {
         const latest = res.data.records[0]
         if (latest.status !== 'running') {
           if (latest.status === 'success') {
             lastSyncResult[gitSourceId] = { ok: true, mrCount: latest.mrCount, ciCount: latest.ciCount }
-            ElNotification({
-              title: '同步完成',
-              message: `处理 MR: ${latest.mrCount || 0} 个，CI: ${latest.ciCount || 0} 个`,
-              type: 'success',
-              duration: 5000,
-            })
+            ElMessage.success(`同步完成：处理 MR ${latest.mrCount || 0} 个，CI ${latest.ciCount || 0} 个`)
           } else {
-            lastSyncResult[gitSourceId] = { ok: false, error: latest.errorMsg }
-            ElNotification({
-              title: '同步失败',
-              message: latest.errorMsg || '未知错误',
-              type: 'error',
-              duration: 8000,
-            })
+            lastSyncResult[gitSourceId] = { ok: false }
+            ElMessage.error(`同步失败：${latest.errorMsg || '未知错误'}`)
           }
           return
         }
       }
     } catch {
-      // 轮询出错继续尝试
+      // 轮询失败继续
     }
   }
-  lastSyncResult[gitSourceId] = { ok: false, error: '同步超时' }
-  ElMessage.warning('同步状态获取超时，请稍后检查同步日志')
+  lastSyncResult[gitSourceId] = { ok: false }
+  ElMessage.warning('同步状态获取超时，请稍后查看同步日志确认结果')
 }
 
 async function handleDelete(id: number) {
@@ -243,7 +247,7 @@ async function handleDelete(id: number) {
     await ElMessageBox.confirm('确定删除该 Git 源？关联的同步日志和历史数据将保留。', '提示', { type: 'warning' })
     await request.delete(`/admin/git-sources/${id}`)
     delete lastSyncResult[id]
-    ElNotification({ title: '删除成功', message: 'Git 源已移除', type: 'success' })
+    ElMessage.success('Git 源已删除')
     fetchList()
   } catch {
     // cancel
@@ -256,28 +260,16 @@ async function testConnection(id: number) {
   try {
     const res: any = await request.post(`/admin/git-sources/${id}/test`)
     if (res.code === 200 && res.data) {
-      ElNotification({
-        title: '连接测试通过',
-        message: typeof res.data === 'string' ? res.data : 'Git API 连接正常，Token 有效',
-        type: 'success',
-        duration: 4000,
-      })
-    } else {
-      ElNotification({
-        title: '连接测试失败',
-        message: res.message || '服务端返回异常，请检查配置',
-        type: 'error',
-        duration: 6000,
-      })
+      ElMessage.success(typeof res.data === 'string' ? `连接成功 — ${res.data}` : 'Git API 连接正常，Token 有效')
     }
+    // 失败时拦截器已弹 message：res.message 来自后端
   } catch (err: any) {
-    const backendMsg = err?.response?.data?.message || err?.message || ''
-    ElNotification({
-      title: '连接测试失败',
-      message: backendMsg || '无法连接到 Git API，请检查地址和 Token 是否正确',
-      type: 'error',
-      duration: 8000,
-    })
+    // 网络错误 / 超时 / 后端 500 — 拦截器已弹 "网络错误" 或后端 message
+    // 额外弹详细提示
+    const detail = err?.response?.data?.message || err?.message || ''
+    if (detail) {
+      ElMessage.error(`连接测试失败：${detail}`)
+    }
   } finally {
     testingMap[id] = false
   }
