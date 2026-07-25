@@ -26,7 +26,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.WeekFields;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Tag(name = "报表", description = "统计报表：概览、趋势、分布")
 @RestController
@@ -124,6 +126,17 @@ public class ReportController {
             asyncExportService.exportCsvAsync(task.getId());
         }
         return Result.success(task);
+    }
+
+    @Operation(summary = "报表明细数据", description = "按日期范围查询 MR 明细列表，支持下钻到看板")
+    @GetMapping("/detail")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
+    public Result<List<Map<String, Object>>> detail(
+            @Parameter(description = "开始日期 yyyy-MM-dd") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @Parameter(description = "结束日期 yyyy-MM-dd") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+            @Parameter(description = "项目ID") @RequestParam(required = false) Long projectId
+    ) {
+        return Result.success(reportService.getDetail(start, end, projectId));
     }
 
     @Operation(summary = "查询导出任务状态")

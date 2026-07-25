@@ -199,6 +199,22 @@ public class AuthController {
         user.setPassword(null);
         return Result.success(user);
     }
+    @Operation(summary = "查询当前用户角色与权限", description = "返回当前登录用户的角色编码列表与权限编码列表")
+    @GetMapping("/permissions")
+    public Result<Map<String, Object>> getPermissions() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String userIdStr = authentication.getName();
+        Long userId = Long.valueOf(userIdStr);
+
+        List<Role> roles = userMapper.selectRolesByUserId(userId);
+        List<Permission> permissions = userMapper.selectPermissionsByUserId(userId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("roles", roles.stream().map(Role::getCode).collect(Collectors.toList()));
+        result.put("permissions", permissions.stream().map(Permission::getCode).collect(Collectors.toList()));
+        return Result.success(result);
+    }
+
     private void incrementFailCount(String key) {
         Long count = redisTemplate.opsForValue().increment(key);
         if (count != null && count == 1) {

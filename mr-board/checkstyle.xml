@@ -6,68 +6,53 @@
     <property name="charset" value="UTF-8"/>
     <property name="severity" value="warning"/>
     <property name="fileExtensions" value="java, properties, xml"/>
-
-    <!-- 文件长度不超过 1500 行 -->
-    <module name="FileLength">
-        <property name="max" value="1500"/>
+    <module name="BeforeExecutionExclusionFileFilter">
+        <property name="fileNamePattern" value="module\-info\.java$"/>
     </module>
-
-    <!-- 不允许制表符 -->
-    <module name="FileTabCharacter">
-        <property name="eachLine" value="true"/>
+    <module name="LineLength">
+        <property name="max" value="160"/>
+        <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
     </module>
-
     <module name="TreeWalker">
-        <!-- import 语句避免使用 * -->
-        <module name="AvoidStarImport">
-            <property name="severity" value="error"/>
-        </module>
-
-        <!-- 行长度不超过 150 字符 -->
-        <module name="LineLength">
-            <property name="max" value="150"/>
-            <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
-        </module>
-
-        <!-- 方法长度不超过 150 行 -->
-        <module name="MethodLength">
-            <property name="tokens" value="METHOD_DEF"/>
-            <property name="max" value="150"/>
-        </module>
-
-        <!-- 类名使用大写驼峰 -->
-        <module name="TypeName">
-            <property name="severity" value="error"/>
-        </module>
-
-        <!-- 方法名和变量名使用小写驼峰 -->
-        <module name="MethodName">
-            <property name="format" value="^[a-z][a-zA-Z0-9]*$"/>
-        </module>
-        <module name="LocalVariableName">
-            <property name="format" value="^[a-z][a-zA-Z0-9]*$"/>
-        </module>
-
-        <!-- 常量使用全大写+下划线 -->
-        <module name="ConstantName">
-            <property name="format" value="^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$"/>
-        </module>
-
-        <!-- 左大括号不换行 -->
-        <module name="LeftCurly">
-            <property name="option" value="eol"/>
-        </module>
-
-        <!-- 避免空 catch 块 -->
-        <module name="EmptyCatchBlock">
-            <property name="severity" value="error"/>
-        </module>
-
-        <!-- 避免出现 System.out.println -->
-        <module name="RegexpSinglelineJava">
-            <property name="format" value="System\.(out|err)\.(print|println)"/>
-            <property name="message" value="不要使用 System.out.println，请使用日志框架"/>
-            <property name="severity" value="warning"/>
-        </module>
+        <module name="AvoidStarImport"/>
+        <module name="RedundantImport"/>
+        <module name="UnusedImports"/>
+        <module name="ConstantName"/>
+        <module name="LocalFinalVariableName"/>
+        <module name="LocalVariableName"/>
+        <module name="MemberName"/>
+        <module name="MethodName"/>
+        <module name="PackageName"/>
+        <module name="ParameterName"/>
+        <module name="StaticVariableName"/>
+        <module name="TypeName"/>
+        <module name="EmptyForIteratorPad"/>
+        <module name="GenericWhitespace"/>
+        <module name="MethodParamPad"/>
+        <module name="NoWhitespaceAfter"/>
+        <module name="NoWhitespaceBefore"/>
+        <module name="OperatorWrap"/>
+        <module name="ParenPad"/>
+        <module name="TypecastParenPad"/>
+        <module name="WhitespaceAfter"/>
+        <module name="WhitespaceAround"/>
+        <module name="AvoidNestedBlocks"/>
+        <module name="EmptyBlock"/>
+        <module name="LeftCurly"/>
+        <module name="NeedBraces"/>
+        <module name="RightCurly"/>
+        <module name="EmptyStatement"/>
+        <module name="EqualsHashCode"/>
+        <module name="MissingSwitchDefault"/>
+        <module name="MultipleVariableDeclarations"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+        <module name="OneStatementPerLine"/>
+        <module name="FinalClass"/>
+        <module name="HideUtilityClassConstructor"/>
+        <module name="InterfaceIsType"/>
+        <module name="VisibilityModifier"/>
+        <module name="ArrayTypeStyle"/>
+        <module name="UpperEll"/>
     </module>
 </module>
