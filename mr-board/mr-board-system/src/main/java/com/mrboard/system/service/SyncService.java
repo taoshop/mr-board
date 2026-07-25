@@ -66,11 +66,39 @@ public class SyncService {
         if (project == null) {
             throw new IllegalArgumentException("Project not found: " + projectId);
         }
+        boolean isFull = project.getLastSyncAt() == null;
+        return isFull
+                ? fullSyncProject(project, triggerType)
+                : incrementalSyncProject(project, triggerType);
+    }
 
+    /**
+     * 全量同步：拉取所有 MR（忽略 lastSyncAt），适用于首次同步或手动触发
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SyncLog fullSyncProject(Project project, String triggerType) {
+        project.setLastSyncAt(null);
+        projectMapper.updateById(project);
+        return doSync(project, triggerType, "full");
+    }
+
+    /**
+     * 增量同步：仅拉取 lastSyncAt 之后更新的 MR
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SyncLog incrementalSyncProject(Project project, String triggerType) {
+        return doSync(project, triggerType, "incremental");
+    }
+
+    /**
+     * 核心同步逻辑（全量/增量共用）
+     */
+    private SyncLog doSync(Project project, String triggerType, String syncType) {
+        Long projectId = project.getId();
         SyncLog logRecord = new SyncLog();
         logRecord.setProjectId(projectId);
         logRecord.setGitSourceId(project.getGitSourceId());
-        logRecord.setSyncType("incremental");
+        logRecord.setSyncType(syncType);
         logRecord.setTriggerType(triggerType);
         logRecord.setStatus("running");
         logRecord.setCreatedAt(LocalDateTime.now());

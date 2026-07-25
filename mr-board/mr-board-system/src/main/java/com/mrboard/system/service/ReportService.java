@@ -22,9 +22,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.WeekFields;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -266,6 +268,41 @@ public class ReportService {
             v = "\"" + v + "\"";
         }
         return v;
+    }
+
+    /**
+     * 报表明细数据：按日期范围 + 可选项目筛选 MR 列表
+     */
+    public List<Map<String, Object>> getDetail(LocalDate startDate, LocalDate endDate, Long projectId) {
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.plusDays(1).atStartOfDay();
+
+        LambdaQueryWrapper<Mrs> wrapper = new LambdaQueryWrapper<>();
+        wrapper.ge(Mrs::getCreatedAt, start)
+                .lt(Mrs::getCreatedAt, end);
+        if (projectId != null) {
+            wrapper.eq(Mrs::getProjectId, projectId);
+        }
+        wrapper.orderByDesc(Mrs::getCreatedAt);
+        List<Mrs> records = mrsMapper.selectList(wrapper);
+
+        return records.stream().map(mr -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", mr.getId());
+            row.put("title", mr.getTitle());
+            row.put("authorName", mr.getAuthorName());
+            row.put("sourceBranch", mr.getSourceBranch());
+            row.put("targetBranch", mr.getTargetBranch());
+            row.put("boardStatus", mr.getBoardStatus());
+            row.put("ciStatus", mr.getCiStatus());
+            row.put("hasConflict", mr.getHasConflict());
+            row.put("projectId", mr.getProjectId());
+            row.put("projectName", getProjectName(mr.getProjectId()));
+            row.put("createdAt", formatDateTime(mr.getCreatedAt()));
+            row.put("mergedAt", formatDateTime(mr.getMergedAt()));
+            row.put("webUrl", mr.getWebUrl());
+            return row;
+        }).collect(java.util.stream.Collectors.toList());
     }
 
     private String formatWeekLabel(LocalDate date) {

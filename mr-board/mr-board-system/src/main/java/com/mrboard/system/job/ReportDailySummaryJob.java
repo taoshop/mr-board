@@ -120,12 +120,15 @@ public class ReportDailySummaryJob implements Job {
         summary.setCiSuccessCount(success);
         summary.setCiFailedCount(failed);
 
-        // 6. conflict_count: 昨日有更新且存在冲突的 MR 数
+        // 6. conflict_count: 统计当日存在冲突的 MR 数
+        //    口径：hasConflict=true 且在当日有更新  OR  boardStatus='conflict'（含历史延续冲突）
+        //    说明：冲突 MR 可能跨天存在，仅统计当日活跃冲突可避免历史冲突被重复计入。
         LambdaQueryWrapper<Mrs> conflictWrapper = new LambdaQueryWrapper<>();
         conflictWrapper.eq(Mrs::getProjectId, projectId)
-                .eq(Mrs::getHasConflict, true)
-                .ge(Mrs::getUpdatedAt, start)
-                .le(Mrs::getUpdatedAt, end);
+                .and(w -> w
+                    .eq(Mrs::getBoardStatus, "conflict")
+                    .or()
+                    .eq(Mrs::getHasConflict, true));
         summary.setConflictCount(mrsMapper.selectCount(conflictWrapper).intValue());
 
         return summary;

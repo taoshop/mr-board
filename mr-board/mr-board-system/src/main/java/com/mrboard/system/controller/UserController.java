@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mrboard.common.result.Result;
 import com.mrboard.system.dto.UserCreateRequest;
+import com.mrboard.system.entity.Role;
 import com.mrboard.system.entity.User;
 import com.mrboard.system.entity.UserRole;
 import com.mrboard.system.mapper.UserMapper;
@@ -46,6 +47,11 @@ public class UserController {
         }
         wrapper.orderByDesc(User::getCreatedAt);
         Page<User> result = userMapper.selectPage(new Page<>(page, size), wrapper);
+        // 填充每个用户的角色信息
+        for (User user : result.getRecords()) {
+            List<Role> roles = userMapper.selectRolesByUserId(user.getId());
+            user.setRoles(roles.stream().map(Role::getName).collect(Collectors.toList()));
+        }
         return Result.success(result);
     }
 

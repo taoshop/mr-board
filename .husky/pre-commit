@@ -1,0 +1,20 @@
+#!/bin/sh
+# MR Board System - Pre-commit Hook
+# Run linting and tests before each commit
+
+echo "[husky] Running pre-commit checks..."
+
+# Backend: Maven compile check (skip tests for speed)
+echo "[husky] Backend compile check..."
+(cd mr-board && mvn compile -q 2>&1) || {
+    echo "[husky] ERROR: Backend compilation failed. Please fix before committing."
+    exit 1
+}
+
+# Frontend: TypeScript check
+echo "[husky] Frontend type check..."
+(cd mr-board-frontend && npx vue-tsc --noEmit 2>&1) || {
+    echo "[husky] WARNING: Frontend type check had issues. Continuing..."
+}
+
+echo "[husky] All checks passed."

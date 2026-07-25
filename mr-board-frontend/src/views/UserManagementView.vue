@@ -17,7 +17,12 @@
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="displayName" label="显示名" />
         <el-table-column prop="email" label="邮箱" />
-        <el-table-column prop="department" label="部门" />
+        <el-table-column label="角色">
+          <template #default="{ row }">
+            <el-tag v-for="(r, i) in row.roles" :key="i" size="small" style="margin-right: 4px">{{ r }}</el-tag>
+            <span v-if="!row.roles?.length" style="color: #909399">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" />
         <el-table-column label="操作" width="180">
           <template #default="{ row }">

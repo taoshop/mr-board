@@ -12,10 +12,10 @@ export interface UserInfo {
 export const useUserStore = defineStore(
   'user',
   () => {
-    const accessToken = ref(localStorage.getItem('accessToken') || '')
-    const refreshToken = ref(localStorage.getItem('refreshToken') || '')
+    const accessToken = ref('')
+    const refreshToken = ref('')
     const userInfo = ref<UserInfo | null>(null)
-    const mustChangePassword = ref(localStorage.getItem('mustChangePassword') === 'true')
+    const mustChangePassword = ref(false)
 
     const isLoggedIn = computed(() => !!accessToken.value)
     const isAdmin = computed(() => userInfo.value?.roles?.includes('admin') || false)
@@ -27,29 +27,14 @@ export const useUserStore = defineStore(
     function setToken(access: string, refresh: string) {
       accessToken.value = access
       refreshToken.value = refresh
-      localStorage.setItem('accessToken', access)
-      localStorage.setItem('refreshToken', refresh)
     }
 
     function setUserInfo(info: UserInfo) {
       userInfo.value = info
-      localStorage.setItem('userInfo', JSON.stringify(info))
     }
 
     function setMustChangePassword(value: boolean) {
       mustChangePassword.value = value
-      localStorage.setItem('mustChangePassword', String(value))
-    }
-
-    function initFromStorage() {
-      const stored = localStorage.getItem('userInfo')
-      if (stored) {
-        try {
-          userInfo.value = JSON.parse(stored)
-        } catch {
-          userInfo.value = null
-        }
-      }
     }
 
     function logout() {
@@ -57,10 +42,6 @@ export const useUserStore = defineStore(
       refreshToken.value = ''
       userInfo.value = null
       mustChangePassword.value = false
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('userInfo')
-      localStorage.removeItem('mustChangePassword')
     }
 
     return {
@@ -75,7 +56,12 @@ export const useUserStore = defineStore(
       setUserInfo,
       setMustChangePassword,
       logout,
-      initFromStorage,
     }
+  },
+  {
+    persist: {
+      key: 'mr-board-user',
+      pick: ['accessToken', 'refreshToken', 'userInfo', 'mustChangePassword'],
+    },
   }
 )
