@@ -36,7 +36,7 @@ request.interceptors.response.use(
   (response) => {
     const { code, message } = response.data
     if (code !== 200) {
-      ElMessage.error(message || '请求失败')
+      ElMessage.error({ message: message || '请求失败', duration: 8000 })
       return Promise.reject(new Error(message))
     }
     return response.data
@@ -78,7 +78,7 @@ request.interceptors.response.use(
     }
 
     const message = error.response?.data?.message || '网络错误'
-    ElMessage.error(message)
+    ElMessage.error({ message, duration: 8000 })
     return Promise.reject(error)
   }
 )

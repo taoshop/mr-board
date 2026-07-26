@@ -405,7 +405,7 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
 
   const dropError = canDrop(mr, targetStatus)
   if (dropError) {
-    ElMessage.warning(dropError)
+    ElMessage.warning({ message: dropError, duration: 5000 })
     return
   }
 
@@ -439,9 +439,9 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
     if (res.code !== 200) {
       throw new Error(res.data.msg || '状态更新失败')
     }
-    ElMessage.success('状态更新成功')
+    ElMessage.success({ message: '状态更新成功', duration: 5000 })
   } catch (e: any) {
-    // 回滚
+    // 回滚（错误提示由 request 拦截器统一显示）
     const currentList = boardData.value[targetStatus] || []
     const idx = currentList.findIndex((m) => m.id === mr.id)
     if (idx > -1) {
@@ -449,7 +449,6 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
     }
     mr.boardStatus = oldStatus
     sourceList.splice(sourceIdx > -1 ? sourceIdx : 0, 0, mr)
-    ElMessage.error(e.message || '状态更新失败')
   }
 }
 
