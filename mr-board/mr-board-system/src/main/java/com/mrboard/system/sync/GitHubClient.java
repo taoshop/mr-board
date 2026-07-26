@@ -169,9 +169,13 @@ public class GitHubClient implements GitSyncClient {
             HttpEntity<Map> entity = new HttpEntity<>(Map.of("merge_method", "merge"), headers);
             restTemplate.exchange(url, HttpMethod.PUT, entity, Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to merge PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new RuntimeException(detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to merge PR: {}", e.getMessage());
-            return false;
+            log.error("Failed to merge PR #{}: {}", prNumber, e.getMessage());
+            throw new RuntimeException("Git平台合并失败: " + e.getMessage());
         }
     }
 
@@ -185,9 +189,13 @@ public class GitHubClient implements GitSyncClient {
             HttpEntity<Map> entity = new HttpEntity<>(Map.of("state", "closed"), headers);
             restTemplate.exchange(url, HttpMethod.PATCH, entity, Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to close PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new RuntimeException(detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to close PR: {}", e.getMessage());
-            return false;
+            log.error("Failed to close PR #{}: {}", prNumber, e.getMessage());
+            throw new RuntimeException("Git平台关闭失败: " + e.getMessage());
         }
     }
 
@@ -353,6 +361,17 @@ public class GitHubClient implements GitSyncClient {
             log.warn("Failed to fetch comments from GitHub: {}", e.getMessage());
         }
         return results;
+    }
+
+    private String extractErrorMessage(String json) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = mapper.readValue(json, Map.class);
+            Object msg = map.get("message");
+            if (msg != null) return msg.toString();
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private LocalDateTime parseDateTime(String value) {

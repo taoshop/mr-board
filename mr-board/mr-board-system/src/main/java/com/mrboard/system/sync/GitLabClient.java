@@ -184,9 +184,13 @@ public class GitLabClient implements GitSyncClient {
         try {
             restTemplate.exchange(url, org.springframework.http.HttpMethod.PUT, createEntity(), Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to merge MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new RuntimeException(detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to merge MR: {}", e.getMessage());
-            return false;
+            log.error("Failed to merge MR !{}: {}", mrIid, e.getMessage());
+            throw new RuntimeException("Git平台合并失败: " + e.getMessage());
         }
     }
 
@@ -203,9 +207,13 @@ public class GitLabClient implements GitSyncClient {
         try {
             restTemplate.exchange(url, org.springframework.http.HttpMethod.PUT, entity, Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to close MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new RuntimeException(detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to close MR: {}", e.getMessage());
-            return false;
+            log.error("Failed to close MR !{}: {}", mrIid, e.getMessage());
+            throw new RuntimeException("Git平台关闭失败: " + e.getMessage());
         }
     }
 
@@ -350,6 +358,17 @@ public class GitLabClient implements GitSyncClient {
             log.warn("Failed to fetch comments from GitLab: {}", e.getMessage());
         }
         return results;
+    }
+
+    private String extractGitLabError(String json) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = mapper.readValue(json, Map.class);
+            Object msg = map.get("message");
+            if (msg != null) return msg.toString();
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private LocalDateTime parseDateTime(String value) {
