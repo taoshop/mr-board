@@ -17,6 +17,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class GitHubClient implements GitSyncClient {
@@ -189,6 +191,66 @@ public class GitHubClient implements GitSyncClient {
         }
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<String> fetchReviewers(String projectPath, Long mrIid) {
+        List<String> reviewers = new ArrayList<>();
+        String url = apiBaseUrl + "/repos/" + projectPath + "/pulls/" + mrIid + "/reviews";
+        try {
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), List.class);
+            List<Map<String, Object>> reviews = response.getBody();
+            if (reviews == null) return reviewers;
+            for (Map<String, Object> review : reviews) {
+                Map<String, Object> user = (Map<String, Object>) review.get("user");
+                if (user != null) {
+                    String login = (String) user.get("login");
+                    if (login != null && !reviewers.contains(login)) {
+                        reviewers.add(login);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch reviews from GitHub: {}", e.getMessage());
+        }
+        return reviewers;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public String fetchApprovalStatus(String projectPath, Long mrIid) {
+        String url = apiBaseUrl + "/repos/" + projectPath + "/pulls/" + mrIid + "/reviews";
+        try {
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), List.class);
+            List<Map<String, Object>> reviews = response.getBody();
+            if (reviews == null || reviews.isEmpty()) {
+                return "pending";
+            }
+
+            boolean hasApproved = false;
+            boolean hasChangesRequested = false;
+
+            for (Map<String, Object> review : reviews) {
+                String state = (String) review.get("state");
+                if ("APPROVED".equalsIgnoreCase(state)) {
+                    hasApproved = true;
+                } else if ("CHANGES_REQUESTED".equalsIgnoreCase(state)) {
+                    hasChangesRequested = true;
+                }
+            }
+
+            if (hasApproved && !hasChangesRequested) {
+                return "approved";
+            }
+            if (hasChangesRequested) {
+                return "reviewing";
+            }
+            return "reviewing"; // 有 review 记录但未 approved / changes_requested（如 COMMENTED）
+        } catch (Exception e) {
+            log.warn("Failed to fetch approval status from GitHub: {}", e.getMessage());
+            return "pending";
+        }
+    }
+
     private HttpEntity<Void> createEntity() {
         return createEntity(null);
     }
@@ -233,6 +295,15 @@ public class GitHubClient implements GitSyncClient {
         dto.setUpdatedAt(parseDateTime((String) pr.get("updated_at")));
         dto.setMergedAt(parseDateTime((String) pr.get("merged_at")));
         dto.setClosedAt(parseDateTime((String) pr.get("closed_at")));
+
+        List<Map<String, Object>> requestedReviewers = (List<Map<String, Object>>) pr.get("requested_reviewers");
+        if (requestedReviewers != null) {
+            dto.setReviewers(requestedReviewers.stream()
+                    .map(r -> (String) r.get("login"))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
+        }
+
         return dto;
     }
 

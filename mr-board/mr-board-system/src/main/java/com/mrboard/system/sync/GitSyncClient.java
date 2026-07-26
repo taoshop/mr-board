@@ -25,4 +25,12 @@ public interface GitSyncClient {
     default List<CommentDTO> fetchComments(String projectPath, Long mrIid) {
         return Collections.emptyList();
     }
+
+    default List<String> fetchReviewers(String projectPath, Long mrIid) {
+        return Collections.emptyList();
+    }
+
+    default String fetchApprovalStatus(String projectPath, Long mrIid) {
+        return "pending";
+    }
 }

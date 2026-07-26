@@ -18,6 +18,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class GitLabClient implements GitSyncClient {
@@ -207,6 +209,64 @@ public class GitLabClient implements GitSyncClient {
         }
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<String> fetchReviewers(String projectPath, Long mrIid) {
+        List<String> reviewers = new ArrayList<>();
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/approvals";
+        try {
+            org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, createEntity(), Map.class
+            );
+            Map<String, Object> body = response.getBody();
+            if (body == null) return reviewers;
+            List<Map<String, Object>> approvedBy = (List<Map<String, Object>>) body.get("approved_by");
+            if (approvedBy != null) {
+                for (Map<String, Object> item : approvedBy) {
+                    Map<String, Object> user = (Map<String, Object>) item.get("user");
+                    if (user != null) {
+                        String username = (String) user.get("username");
+                        if (username != null) {
+                            reviewers.add(username);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch approvals from GitLab: {}", e.getMessage());
+        }
+        return reviewers;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public String fetchApprovalStatus(String projectPath, Long mrIid) {
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/approvals";
+        try {
+            org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, createEntity(), Map.class
+            );
+            Map<String, Object> body = response.getBody();
+            if (body == null) return "pending";
+
+            Boolean approved = (Boolean) body.get("approved");
+            List<Map<String, Object>> approvedBy = (List<Map<String, Object>>) body.get("approved_by");
+
+            if (Boolean.TRUE.equals(approved)) {
+                return "approved";
+            }
+            if (approvedBy != null && !approvedBy.isEmpty()) {
+                return "reviewing";
+            }
+            return "pending";
+        } catch (Exception e) {
+            log.warn("Failed to fetch approval status from GitLab: {}", e.getMessage());
+            return "pending";
+        }
+    }
+
     private org.springframework.http.HttpEntity<Void> createEntity() {
         org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
         headers.set("PRIVATE-TOKEN", accessToken);
@@ -240,6 +300,15 @@ public class GitLabClient implements GitSyncClient {
         dto.setUpdatedAt(parseDateTime((String) mr.get("updated_at")));
         dto.setMergedAt(parseDateTime((String) mr.get("merged_at")));
         dto.setClosedAt(parseDateTime((String) mr.get("closed_at")));
+
+        List<Map<String, Object>> reviewers = (List<Map<String, Object>>) mr.get("reviewers");
+        if (reviewers != null) {
+            dto.setReviewers(reviewers.stream()
+                    .map(r -> (String) r.get("username"))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
+        }
+
         return dto;
     }
 

@@ -2,19 +2,23 @@ package com.mrboard.system.service;
 
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
+import java.util.List;
 
 @Component
 public class BoardStatusCalculator {
 
     public String calculate(String platformStatus, Boolean hasConflict, String ciStatus, Boolean mergeable) {
-        return calculate(platformStatus, hasConflict, ciStatus, mergeable, "");
+        return calculate(platformStatus, hasConflict, ciStatus, mergeable, "", "pending", null);
     }
 
-    public String calculate(String platformStatus, Boolean hasConflict, String ciStatus, Boolean mergeable, String title) {
+    public String calculate(String platformStatus, Boolean hasConflict, String ciStatus,
+                            Boolean mergeable, String title, String approvalStatus,
+                            List<String> reviewers) {
         if (platformStatus == null) platformStatus = "";
         if (ciStatus == null) ciStatus = "unknown";
+        if (approvalStatus == null) approvalStatus = "pending";
 
+        // 1. 终态
         if ("merged".equalsIgnoreCase(platformStatus)) {
             return "merged";
         }
@@ -22,37 +26,41 @@ public class BoardStatusCalculator {
             return "closed";
         }
 
-        String titleLower = title != null ? title.toLowerCase() : "";
-        boolean isDraft = titleLower.startsWith("draft:") || titleLower.startsWith("wip:");
-
+        // 2. 冲突（最高优先级阻塞态）
         if (Boolean.TRUE.equals(hasConflict)) {
             return "conflict";
         }
 
-        boolean ciFailed = "failed".equalsIgnoreCase(ciStatus);
+        // 3. CI 状态
         boolean ciRunning = "running".equalsIgnoreCase(ciStatus) || "pending".equalsIgnoreCase(ciStatus);
-        boolean ciSuccess = "success".equalsIgnoreCase(ciStatus);
-
-        if (ciFailed) {
-            return "failed";
-        }
+        boolean ciFailed = "failed".equalsIgnoreCase(ciStatus);
 
         if (ciRunning) {
-            return "testing";
+            return "ci_checking";
+        }
+        if (ciFailed) {
+            return "conflict"; // 构建失败归入冲突待解决
         }
 
-        if (!ciSuccess && !"unknown".equalsIgnoreCase(ciStatus)) {
-            return "testing";
+        // 4. Review 状态
+        boolean hasReviewer = reviewers != null && !reviewers.isEmpty();
+
+        if (!hasReviewer || "pending".equalsIgnoreCase(approvalStatus)) {
+            return "pending_review";
         }
 
-        if (Boolean.FALSE.equals(mergeable)) {
-            return "conflict";
+        if ("changes_requested".equalsIgnoreCase(approvalStatus) || "reviewing".equalsIgnoreCase(approvalStatus)) {
+            return "reviewing";
         }
 
-        if (isDraft) {
-            return "open";
+        // 5. 可合并态
+        if ("approved".equalsIgnoreCase(approvalStatus)) {
+            if (Boolean.TRUE.equals(mergeable)) {
+                return "ready";
+            }
+            return "conflict"; // approved 但不可合并（非冲突原因）
         }
 
-        return "ready";
+        return "pending_review";
     }
 }

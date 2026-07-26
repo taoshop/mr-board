@@ -45,6 +45,7 @@
 import { computed } from 'vue'
 import { Link, ArrowRight, ChatLineRound, Document } from '@element-plus/icons-vue'
 import CiStatusIcon from './CiStatusIcon.vue'
+import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
 interface MrData {
   id?: number
@@ -69,33 +70,11 @@ const props = defineProps<{
 
 defineEmits(['view'])
 
-const status = computed(() => props.data.boardStatus || 'ready')
+const status = computed(() => props.data.boardStatus || 'pending_review')
 
-const statusLabel = computed(() => {
-  const map: Record<string, string> = {
-    open: '开发中',
-    testing: '测试中',
-    ready: '可合并',
-    conflict: '冲突',
-    merged: '已合并',
-    closed: '已关闭',
-    failed: '构建失败',
-  }
-  return map[status.value] || status.value
-})
+const statusLabel = computed(() => getStatusLabel(status.value))
 
-const tagType = computed(() => {
-  const map: Record<string, any> = {
-    open: 'info',
-    testing: 'warning',
-    ready: 'success',
-    conflict: 'danger',
-    merged: 'primary',
-    closed: 'info',
-    failed: 'danger',
-  }
-  return map[status.value] || 'info'
-})
+const tagType = computed(() => getStatusTagType(status.value))
 </script>
 
 <style scoped lang="scss">
@@ -131,13 +110,13 @@ const tagType = computed(() => {
     cursor: not-allowed;
   }
 
-  &.status-open { border-left-color: #909399; }
-  &.status-testing { border-left-color: #e6a23c; }
-  &.status-ready { border-left-color: #67c23a; }
+  &.status-pending_review { border-left-color: #909399; }
+  &.status-reviewing { border-left-color: #e6a23c; }
+  &.status-ci_checking { border-left-color: #409eff; }
   &.status-conflict { border-left-color: #f56c6c; }
+  &.status-ready { border-left-color: #67c23a; }
   &.status-merged { border-left-color: #409eff; }
   &.status-closed { border-left-color: #909399; }
-  &.status-failed { border-left-color: #f56c6c; }
 
   .card-header {
     display: flex;

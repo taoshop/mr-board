@@ -5,13 +5,13 @@
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
       <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags @change="onFilterChange" style="width: 200px">
-        <el-option label="开发中" value="open" />
-        <el-option label="测试中" value="testing" />
+        <el-option label="待 Review" value="pending_review" />
+        <el-option label="Review 中" value="reviewing" />
+        <el-option label="CI 检查中" value="ci_checking" />
+        <el-option label="冲突待解决" value="conflict" />
         <el-option label="可合并" value="ready" />
-        <el-option label="冲突" value="conflict" />
         <el-option label="已合并" value="merged" />
         <el-option label="已关闭" value="closed" />
-        <el-option label="构建失败" value="failed" />
       </el-select>
       <el-input v-model="filters.author" placeholder="作者" clearable @input="onFilterChange" style="width: 140px" />
       <el-input v-model="filters.branch" placeholder="目标分支" clearable @input="onFilterChange" style="width: 160px" />
@@ -176,6 +176,7 @@ import type { CiJob, StatusHistory, ChangeItem, CommentItem } from '@/api/board'
 import { useUserStore } from '@/stores/user'
 import MrCard from '@/components/MrCard.vue'
 import CiStatusIcon from '@/components/CiStatusIcon.vue'
+import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
 interface Column {
   key: string
@@ -453,29 +454,11 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
 }
 
 function statusLabel(status: string): string {
-  const map: Record<string, string> = {
-    open: '开发中',
-    testing: '测试中',
-    ready: '可合并',
-    conflict: '冲突',
-    merged: '已合并',
-    closed: '已关闭',
-    failed: '构建失败',
-  }
-  return map[status] || status
+  return getStatusLabel(status)
 }
 
 function tagType(status: string): string {
-  const map: Record<string, string> = {
-    open: 'info',
-    testing: 'warning',
-    ready: 'success',
-    conflict: 'danger',
-    merged: 'primary',
-    closed: 'info',
-    failed: 'danger',
-  }
-  return map[status] || 'info'
+  return getStatusTagType(status)
 }
 
 function changeLabel(status: string): string {
