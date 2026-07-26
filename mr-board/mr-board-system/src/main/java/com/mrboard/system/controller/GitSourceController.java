@@ -173,7 +173,7 @@ public class GitSourceController {
             return Result.error(404, "Git源不存在");
         }
         boolean full = "full".equalsIgnoreCase(type);
-        syncService.triggerSync(id, full, "manual");
+        syncService.triggerSyncAsync(id, full, "manual");
         return Result.success("同步任务已触发");
     }
 

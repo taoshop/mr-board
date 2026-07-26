@@ -152,7 +152,8 @@ public class ReportService {
             case "status" -> {
                 List<Map<String, Object>> rows = mrsMapper.selectStatusDistribution();
                 for (Map<String, Object> row : rows) {
-                    vo.getLabels().add(String.valueOf(row.get("boardStatus")));
+                    String boardStatus = String.valueOf(row.get("boardStatus"));
+                    vo.getLabels().add(labelOf(boardStatus));
                     vo.getValues().add(((Number) row.get("count")).intValue());
                 }
             }
@@ -310,5 +311,18 @@ public class ReportService {
         int week = date.get(wf.weekOfWeekBasedYear());
         int year = date.get(wf.weekBasedYear());
         return year + "-W" + String.format("%02d", week);
+    }
+
+    private String labelOf(String key) {
+        return switch (key) {
+            case "pending_review" -> "待 Review";
+            case "reviewing" -> "Review 中";
+            case "ci_checking" -> "CI 检查中";
+            case "conflict" -> "冲突待解决";
+            case "ready" -> "可合并";
+            case "merged" -> "已合并";
+            case "closed" -> "已关闭";
+            default -> key;
+        };
     }
 }

@@ -41,7 +41,7 @@ public class BoardController {
     private final UserMapper userMapper;
 
     private static final List<String> COLUMNS = Arrays.asList(
-            "open", "testing", "ready", "conflict", "merged", "closed", "failed"
+            "pending_review", "reviewing", "ci_checking", "conflict", "ready", "merged", "closed"
     );
 
     @Operation(summary = "看板列定义")
@@ -104,7 +104,7 @@ public class BoardController {
         for (Mrs mr : list) {
             String bs = mr.getBoardStatus();
             if (bs == null || !grouped.containsKey(bs)) {
-                bs = "ready";
+                bs = "pending_review";
             }
             grouped.get(bs).add(mr);
         }
@@ -130,26 +130,26 @@ public class BoardController {
 
     private String labelOf(String key) {
         return switch (key) {
-            case "open" -> "开发中";
-            case "testing" -> "测试中";
+            case "pending_review" -> "待 Review";
+            case "reviewing" -> "Review 中";
+            case "ci_checking" -> "CI 检查中";
+            case "conflict" -> "冲突待解决";
             case "ready" -> "可合并";
-            case "conflict" -> "冲突";
             case "merged" -> "已合并";
             case "closed" -> "已关闭";
-            case "failed" -> "构建失败";
             default -> key;
         };
     }
 
     private String colorOf(String key) {
         return switch (key) {
-            case "open" -> "#909399";
-            case "testing" -> "#e6a23c";
-            case "ready" -> "#67c23a";
+            case "pending_review" -> "#909399";
+            case "reviewing" -> "#e6a23c";
+            case "ci_checking" -> "#409eff";
             case "conflict" -> "#f56c6c";
+            case "ready" -> "#67c23a";
             case "merged" -> "#409eff";
             case "closed" -> "#909399";
-            case "failed" -> "#f56c6c";
             default -> "#909399";
         };
     }
