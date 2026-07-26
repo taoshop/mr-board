@@ -34,10 +34,16 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
-    const { code, message } = response.data
+    const { code, message: msg } = response.data
     if (code !== 200) {
-      ElMessage.error({ message: message || '请求失败', duration: 8000 })
-      return Promise.reject(new Error(message))
+      console.log('[request interceptor] error msg:', msg)
+      try {
+        const show = (window as any).$showErrorMessage
+        if (show) show(msg || '请求失败')
+      } catch (e) {
+        console.error('[request interceptor] showErrorMessage failed:', e)
+      }
+      return Promise.reject(new Error(msg))
     }
     return response.data
   },
@@ -77,8 +83,14 @@ request.interceptors.response.use(
       }
     }
 
-    const message = error.response?.data?.message || '网络错误'
-    ElMessage.error({ message, duration: 8000 })
+    const errMsg = error.response?.data?.message || '网络错误'
+    console.log('[request interceptor] network error msg:', errMsg)
+    try {
+      const show = (window as any).$showErrorMessage
+      if (show) show(errMsg)
+    } catch (e) {
+      console.error('[request interceptor] showErrorMessage failed:', e)
+    }
     return Promise.reject(error)
   }
 )
