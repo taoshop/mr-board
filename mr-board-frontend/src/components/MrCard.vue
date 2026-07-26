@@ -3,7 +3,8 @@
     class="mr-card"
     :class="['status-' + status, { 'is-conflict': data.hasConflict, 'is-readonly': readOnly }]"
     shadow="hover"
-    :body-style="{ padding: '12px' }"
+    :body-style="{ padding: '10px 12px' }"
+    @click="handleCardClick"
   >
     <div class="card-header">
       <el-tag size="small" :type="tagType" effect="light">{{ statusLabel }}</el-tag>
@@ -12,14 +13,18 @@
     <div class="title" :title="data.title">{{ data.title }}</div>
     <div class="meta">
       <div class="author">
-        <el-avatar :size="20" :src="data.authorAvatar" />
+        <el-avatar :size="18" :src="data.authorAvatar" />
         <span class="name">{{ data.authorName }}</span>
+        <span v-if="reviewers.length" class="reviewers">
+          <el-icon><User /></el-icon>
+          <span class="reviewer-names">{{ reviewers.join(', ') }}</span>
+        </span>
       </div>
       <div class="branch" :title="data.sourceBranch + ' → ' + data.targetBranch">
         <el-icon><Link /></el-icon>
-        <span>{{ data.sourceBranch }}</span>
+        <span class="branch-name">{{ data.sourceBranch }}</span>
         <el-icon><ArrowRight /></el-icon>
-        <span>{{ data.targetBranch }}</span>
+        <span class="branch-name">{{ data.targetBranch }}</span>
       </div>
     </div>
     <div class="footer">
@@ -32,18 +37,18 @@
         </span>
       </div>
       <div class="ci" v-if="data.ciStatus">
-        <CiStatusIcon :status="data.ciStatus" :size="16" />
+        <CiStatusIcon :status="data.ciStatus" :size="14" />
       </div>
     </div>
     <div class="actions" v-if="!readOnly">
-      <el-button link size="small" @click="$emit('view', data)">查看</el-button>
+      <el-button link size="small" @click.stop="$emit('view', data)">查看详情</el-button>
     </div>
   </el-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Link, ArrowRight, ChatLineRound, Document } from '@element-plus/icons-vue'
+import { Link, ArrowRight, ChatLineRound, Document, User } from '@element-plus/icons-vue'
 import CiStatusIcon from './CiStatusIcon.vue'
 import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
@@ -61,6 +66,8 @@ interface MrData {
   changesCount?: number
   hasConflict?: boolean
   webUrl?: string
+  reviewers?: string
+  approvalStatus?: string
 }
 
 const props = defineProps<{
@@ -68,19 +75,26 @@ const props = defineProps<{
   readOnly?: boolean
 }>()
 
-defineEmits(['view'])
+const emit = defineEmits(['view'])
 
 const status = computed(() => props.data.boardStatus || 'pending_review')
-
 const statusLabel = computed(() => getStatusLabel(status.value))
-
 const tagType = computed(() => getStatusTagType(status.value))
+
+const reviewers = computed(() => {
+  if (!props.data.reviewers) return []
+  return props.data.reviewers.split(',').filter(Boolean)
+})
+
+function handleCardClick() {
+  emit('view', props.data)
+}
 </script>
 
 <style scoped lang="scss">
 .mr-card {
-  margin-bottom: 10px;
-  cursor: grab;
+  margin-bottom: 8px;
+  cursor: pointer;
   border-left: 4px solid transparent;
   transition: transform 0.2s;
   position: relative;
@@ -122,7 +136,7 @@ const tagType = computed(() => getStatusTagType(status.value))
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 
     .mr-id {
       font-size: 12px;
@@ -131,29 +145,49 @@ const tagType = computed(() => getStatusTagType(status.value))
   }
 
   .title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: #303133;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
+    line-height: 1.4;
   }
 
   .meta {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 
     .author {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
 
       .name {
         font-size: 12px;
         color: #606266;
+      }
+
+      .reviewers {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: #409eff;
+        margin-left: auto;
+        background: #f0f9ff;
+        padding: 1px 6px;
+        border-radius: 4px;
+        max-width: 120px;
+
+        .reviewer-names {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
       }
     }
 
@@ -161,11 +195,16 @@ const tagType = computed(() => getStatusTagType(status.value))
       display: flex;
       align-items: center;
       gap: 4px;
-      font-size: 12px;
+      font-size: 11px;
       color: #909399;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+
+      .branch-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 80px;
+      }
     }
   }
 
@@ -173,7 +212,7 @@ const tagType = computed(() => getStatusTagType(status.value))
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 
     .stats {
       display: flex;

@@ -47,7 +47,7 @@
           <RecycleScroller
             class="scroller"
             :items="boardData[col.key] || []"
-            :item-size="120"
+            :item-size="160"
             key-field="id"
             v-slot="{ item }"
           >
