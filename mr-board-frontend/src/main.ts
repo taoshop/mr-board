@@ -6,6 +6,7 @@ import App from './App.vue'
 import router from './router'
 import VueVirtualScroller from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import './styles/element-override.scss'
 
 import { ElMessage } from 'element-plus'
 

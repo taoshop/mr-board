@@ -1,0 +1,19 @@
+/* Element Plus 弹窗/提示居中覆盖 */
+.el-message-box {
+  position: fixed !important;
+  top: 15vh !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  margin: 0 !important;
+}
+
+.el-message {
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.el-message-box__wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
