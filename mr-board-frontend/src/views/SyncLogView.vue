@@ -8,17 +8,34 @@
       </template>
 
       <el-form :inline="true" class="filter-form">
+        <el-form-item label="Git 源">
+          <el-select v-model="query.gitSourceId" placeholder="全部" clearable @change="fetchLogs" style="width: 160px">
+            <el-option v-for="s in gitSources" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="项目">
-          <el-select v-model="query.projectId" placeholder="全部" clearable @change="fetchLogs">
+          <el-select v-model="query.projectId" placeholder="全部" clearable @change="fetchLogs" style="width: 160px">
             <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" placeholder="全部" clearable @change="fetchLogs">
+          <el-select v-model="query.status" placeholder="全部" clearable @change="fetchLogs" style="width: 120px">
             <el-option label="成功" value="success" />
             <el-option label="失败" value="failed" />
             <el-option label="运行中" value="running" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="时间范围">
+          <el-date-picker
+            v-model="query.dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始"
+            end-placeholder="结束"
+            value-format="YYYY-MM-DD"
+            @change="fetchLogs"
+            style="width: 240px"
+          />
         </el-form-item>
       </el-form>
 
@@ -70,17 +87,27 @@ const loading = ref(false)
 const logs = ref<SyncLog[]>([])
 const total = ref(0)
 const projects = ref<{ id: number; name: string }[]>([])
+const gitSources = ref<{ id: number; name: string }[]>([])
 const query = reactive({
   page: 1,
   size: 20,
+  gitSourceId: null as number | null,
   projectId: null as number | null,
   status: '',
+  dateRange: [] as string[],
 })
 
 async function fetchLogs() {
   loading.value = true
   try {
-    const params = { ...query }
+    const params: Record<string, any> = { page: query.page, size: query.size }
+    if (query.gitSourceId != null) params.gitSourceId = query.gitSourceId
+    if (query.projectId != null) params.projectId = query.projectId
+    if (query.status) params.status = query.status
+    if (query.dateRange && query.dateRange.length === 2) {
+      params.startDate = query.dateRange[0]
+      params.endDate = query.dateRange[1]
+    }
     const res: any = await request.get('/admin/sync/logs', { params })
     if (res.code === 200) {
       logs.value = res.data.records
@@ -100,6 +127,17 @@ async function fetchProjects() {
   }
 }
 
+async function fetchGitSources() {
+  try {
+    const res: any = await request.get('/admin/git-sources', { params: { page: 1, size: 1000 } })
+    if (res.code === 200) {
+      gitSources.value = res.data.records || res.data || []
+    }
+  } catch {
+    // 静默失败，不影响页面加载
+  }
+}
+
 function statusType(status: string) {
   const map: Record<string, string> = {
     success: 'success',
@@ -110,6 +148,7 @@ function statusType(status: string) {
 }
 
 onMounted(() => {
+  fetchGitSources()
   fetchProjects()
   fetchLogs()
 })

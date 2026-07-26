@@ -22,6 +22,7 @@ import com.mrboard.system.websocket.SyncWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -41,6 +42,11 @@ public class SyncService {
     private final SyncLogMapper syncLogMapper;
     private final BoardStatusCalculator boardStatusCalculator;
     private final SyncWebSocketHandler syncWebSocketHandler;
+
+    @Async("syncExecutor")
+    public void triggerSyncAsync(Long gitSourceId, boolean full, String triggerType) {
+        triggerSync(gitSourceId, full, triggerType);
+    }
 
     @Transactional(rollbackFor = Exception.class)
     public void triggerSync(Long gitSourceId, boolean full, String triggerType) {
