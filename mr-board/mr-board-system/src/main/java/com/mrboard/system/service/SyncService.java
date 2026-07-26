@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -122,9 +123,12 @@ public class SyncService {
             GitSyncClient client = gitClientFactory.create(project.getGitSourceId());
 
             LocalDateTime lastSync = project.getLastSyncAt();
-            String updatedAfter = lastSync != null
-                    ? lastSync.format(DateTimeFormatter.ISO_DATE_TIME) + "Z"
-                    : null;
+            String updatedAfter = null;
+            if (lastSync != null) {
+                updatedAfter = lastSync.atZone(ZoneId.systemDefault())
+                        .toInstant()
+                        .toString();
+            }
 
             // state="all" 确保同时获取 open / closed / merged 状态的 MR
             List<MrDTO> mrList = client.fetchMRs(project.getProjectPath(), "all", updatedAfter);

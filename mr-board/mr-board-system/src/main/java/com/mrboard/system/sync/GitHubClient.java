@@ -81,8 +81,8 @@ public class GitHubClient implements GitSyncClient {
                     Thread.sleep(200);
                 } catch (InterruptedException ignored) {}
             } catch (Exception e) {
-                log.error("Failed to fetch PRs from GitHub: {}", e.getMessage());
-                break;
+                log.error("Failed to fetch PRs from GitHub on page {}: {}", page, e.getMessage());
+                throw new RuntimeException("Failed to fetch PRs from GitHub on page " + page, e);
             }
         }
         return result;
@@ -223,7 +223,7 @@ public class GitHubClient implements GitSyncClient {
         }
         dto.setPlatformStatus(mapGitHubState(pr));
         dto.setHasConflict(false);
-        dto.setMergeable(!"closed".equals(pr.get("state")));
+        dto.setMergeable("open".equals(pr.get("state")));
         dto.setChangesCount(0);
         dto.setAdditions(0);
         dto.setDeletions(0);
@@ -239,8 +239,11 @@ public class GitHubClient implements GitSyncClient {
     /** 区分 GitHub PR 的 merged 和 closed 状态 */
     private String mapGitHubState(Map<String, Object> pr) {
         String state = (String) pr.get("state");
-        if ("closed".equals(state) && pr.get("merged_at") != null) {
-            return "merged";
+        Object mergedAt = pr.get("merged_at");
+        if ("closed".equals(state) && mergedAt != null) {
+            if (mergedAt instanceof String && !((String) mergedAt).isBlank()) {
+                return "merged";
+            }
         }
         return state;
     }
