@@ -1,5 +1,6 @@
 package com.mrboard.system.sync;
 
+import com.mrboard.system.exception.GitPlatformException;
 import com.mrboard.system.sync.dto.CiDTO;
 import com.mrboard.system.sync.dto.ChangeDTO;
 import com.mrboard.system.sync.dto.CommentDTO;
@@ -187,10 +188,10 @@ public class GitLabClient implements GitSyncClient {
         } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
             String detail = extractGitLabError(e.getResponseBodyAsString());
             log.error("Failed to merge MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
-            throw new RuntimeException(detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
         } catch (Exception e) {
             log.error("Failed to merge MR !{}: {}", mrIid, e.getMessage());
-            throw new RuntimeException("Git平台合并失败: " + e.getMessage());
+            throw new GitPlatformException(500, "Git平台合并失败: " + e.getMessage(), e);
         }
     }
 
@@ -210,10 +211,10 @@ public class GitLabClient implements GitSyncClient {
         } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
             String detail = extractGitLabError(e.getResponseBodyAsString());
             log.error("Failed to close MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
-            throw new RuntimeException(detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
         } catch (Exception e) {
             log.error("Failed to close MR !{}: {}", mrIid, e.getMessage());
-            throw new RuntimeException("Git平台关闭失败: " + e.getMessage());
+            throw new GitPlatformException(500, "Git平台关闭失败: " + e.getMessage(), e);
         }
     }
 
@@ -222,27 +223,24 @@ public class GitLabClient implements GitSyncClient {
     public List<String> fetchReviewers(String projectPath, Long mrIid) {
         List<String> reviewers = new ArrayList<>();
         String encodedPath = projectPath.replace("/", "%2F");
-        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/approvals";
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid;
         try {
             org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(
                     url, org.springframework.http.HttpMethod.GET, createEntity(), Map.class
             );
             Map<String, Object> body = response.getBody();
             if (body == null) return reviewers;
-            List<Map<String, Object>> approvedBy = (List<Map<String, Object>>) body.get("approved_by");
-            if (approvedBy != null) {
-                for (Map<String, Object> item : approvedBy) {
-                    Map<String, Object> user = (Map<String, Object>) item.get("user");
-                    if (user != null) {
-                        String username = (String) user.get("username");
-                        if (username != null) {
-                            reviewers.add(username);
-                        }
+            List<Map<String, Object>> reviewerList = (List<Map<String, Object>>) body.get("reviewers");
+            if (reviewerList != null) {
+                for (Map<String, Object> item : reviewerList) {
+                    String username = (String) item.get("username");
+                    if (username != null) {
+                        reviewers.add(username);
                     }
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to fetch approvals from GitLab: {}", e.getMessage());
+            log.warn("Failed to fetch reviewers from GitLab: {}", e.getMessage());
         }
         return reviewers;
     }

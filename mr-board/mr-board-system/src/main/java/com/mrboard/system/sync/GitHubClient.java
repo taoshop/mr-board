@@ -1,5 +1,6 @@
 package com.mrboard.system.sync;
 
+import com.mrboard.system.exception.GitPlatformException;
 import com.mrboard.system.sync.dto.CiDTO;
 import com.mrboard.system.sync.dto.ChangeDTO;
 import com.mrboard.system.sync.dto.CommentDTO;
@@ -172,10 +173,10 @@ public class GitHubClient implements GitSyncClient {
         } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
             String detail = extractErrorMessage(e.getResponseBodyAsString());
             log.error("Failed to merge PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
-            throw new RuntimeException(detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
         } catch (Exception e) {
             log.error("Failed to merge PR #{}: {}", prNumber, e.getMessage());
-            throw new RuntimeException("Git平台合并失败: " + e.getMessage());
+            throw new GitPlatformException(500, "Git平台合并失败: " + e.getMessage(), e);
         }
     }
 
@@ -192,10 +193,10 @@ public class GitHubClient implements GitSyncClient {
         } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
             String detail = extractErrorMessage(e.getResponseBodyAsString());
             log.error("Failed to close PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
-            throw new RuntimeException(detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
         } catch (Exception e) {
             log.error("Failed to close PR #{}: {}", prNumber, e.getMessage());
-            throw new RuntimeException("Git平台关闭失败: " + e.getMessage());
+            throw new GitPlatformException(500, "Git平台关闭失败: " + e.getMessage(), e);
         }
     }
 
@@ -203,22 +204,22 @@ public class GitHubClient implements GitSyncClient {
     @SuppressWarnings("unchecked")
     public List<String> fetchReviewers(String projectPath, Long mrIid) {
         List<String> reviewers = new ArrayList<>();
-        String url = apiBaseUrl + "/repos/" + projectPath + "/pulls/" + mrIid + "/reviews";
+        String url = apiBaseUrl + "/repos/" + projectPath + "/pulls/" + mrIid;
         try {
-            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), List.class);
-            List<Map<String, Object>> reviews = response.getBody();
-            if (reviews == null) return reviewers;
-            for (Map<String, Object> review : reviews) {
-                Map<String, Object> user = (Map<String, Object>) review.get("user");
-                if (user != null) {
-                    String login = (String) user.get("login");
-                    if (login != null && !reviewers.contains(login)) {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body == null) return reviewers;
+            List<Map<String, Object>> requestedReviewers = (List<Map<String, Object>>) body.get("requested_reviewers");
+            if (requestedReviewers != null) {
+                for (Map<String, Object> item : requestedReviewers) {
+                    String login = (String) item.get("login");
+                    if (login != null) {
                         reviewers.add(login);
                     }
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to fetch reviews from GitHub: {}", e.getMessage());
+            log.warn("Failed to fetch requested reviewers from GitHub: {}", e.getMessage());
         }
         return reviewers;
     }

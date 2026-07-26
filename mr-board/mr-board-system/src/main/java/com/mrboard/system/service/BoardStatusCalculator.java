@@ -26,23 +26,27 @@ public class BoardStatusCalculator {
             return "closed";
         }
 
-        // 2. 冲突（最高优先级阻塞态）
+        // 2. Draft / WIP 拦截
+        String titleLower = title != null ? title.toLowerCase() : "";
+        boolean isDraft = titleLower.startsWith("draft:") || titleLower.startsWith("wip:");
+        if (isDraft) {
+            return "pending_review";
+        }
+
+        // 3. 冲突（最高优先级阻塞态）
         if (Boolean.TRUE.equals(hasConflict)) {
             return "conflict";
         }
 
-        // 3. CI 状态
+        // 4. CI 状态
         boolean ciRunning = "running".equalsIgnoreCase(ciStatus) || "pending".equalsIgnoreCase(ciStatus);
         boolean ciFailed = "failed".equalsIgnoreCase(ciStatus);
 
-        if (ciRunning) {
+        if (ciRunning || ciFailed) {
             return "ci_checking";
         }
-        if (ciFailed) {
-            return "conflict"; // 构建失败归入冲突待解决
-        }
 
-        // 4. Review 状态
+        // 5. Review 状态
         boolean hasReviewer = reviewers != null && !reviewers.isEmpty();
 
         if (!hasReviewer || "pending".equalsIgnoreCase(approvalStatus)) {
@@ -53,7 +57,7 @@ public class BoardStatusCalculator {
             return "reviewing";
         }
 
-        // 5. 可合并态
+        // 6. 可合并态
         if ("approved".equalsIgnoreCase(approvalStatus)) {
             if (Boolean.TRUE.equals(mergeable)) {
                 return "ready";

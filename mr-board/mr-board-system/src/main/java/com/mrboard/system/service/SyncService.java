@@ -44,6 +44,7 @@ public class SyncService {
     private final SyncWebSocketHandler syncWebSocketHandler;
 
     @Async("syncExecutor")
+    @Transactional(rollbackFor = Exception.class)
     public void triggerSyncAsync(Long gitSourceId, boolean full, String triggerType) {
         triggerSync(gitSourceId, full, triggerType);
     }

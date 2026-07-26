@@ -6,4 +6,4 @@ ALTER TABLE mrs
 -- 旧状态数据迁移
 UPDATE mrs SET board_status = 'pending_review' WHERE board_status = 'open';
 UPDATE mrs SET board_status = 'ci_checking' WHERE board_status = 'testing';
-UPDATE mrs SET board_status = 'conflict' WHERE board_status = 'failed';
+UPDATE mrs SET board_status = 'ci_checking' WHERE board_status = 'failed';

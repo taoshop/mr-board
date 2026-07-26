@@ -94,7 +94,7 @@ function handleCardClick() {
 <style scoped lang="scss">
 .mr-card {
   margin-bottom: 8px;
-  cursor: pointer;
+  cursor: grab;
   border-left: 4px solid transparent;
   transition: transform 0.2s;
   position: relative;

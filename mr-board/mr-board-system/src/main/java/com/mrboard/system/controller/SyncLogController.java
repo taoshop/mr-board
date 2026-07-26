@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 
 @Tag(name = "同步日志", description = "同步任务执行日志查询（PM/TECHLEAD/ADMIN）")
 @RestController
@@ -36,8 +37,8 @@ public class SyncLogController {
             @Parameter(description = "Git源ID") @RequestParam(required = false) Long gitSourceId,
             @Parameter(description = "项目ID") @RequestParam(required = false) Long projectId,
             @Parameter(description = "同步状态") @RequestParam(required = false) String status,
-            @Parameter(description = "开始日期") @RequestParam(required = false) String startDate,
-            @Parameter(description = "结束日期") @RequestParam(required = false) String endDate
+            @Parameter(description = "开始日期，格式 yyyy-MM-dd") @RequestParam(required = false) String startDate,
+            @Parameter(description = "结束日期，格式 yyyy-MM-dd") @RequestParam(required = false) String endDate
     ) {
         LambdaQueryWrapper<SyncLog> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(SyncLog::getCreatedAt);
@@ -51,12 +52,20 @@ public class SyncLogController {
             wrapper.eq(SyncLog::getStatus, status);
         }
         if (startDate != null && !startDate.isEmpty()) {
-            LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
-            wrapper.ge(SyncLog::getCreatedAt, start);
+            try {
+                LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
+                wrapper.ge(SyncLog::getCreatedAt, start);
+            } catch (DateTimeParseException e) {
+                return Result.error(400, "开始日期格式错误，应为 yyyy-MM-dd");
+            }
         }
         if (endDate != null && !endDate.isEmpty()) {
-            LocalDateTime end = LocalDate.parse(endDate).atTime(LocalTime.MAX);
-            wrapper.le(SyncLog::getCreatedAt, end);
+            try {
+                LocalDateTime end = LocalDate.parse(endDate).atTime(LocalTime.MAX);
+                wrapper.le(SyncLog::getCreatedAt, end);
+            } catch (DateTimeParseException e) {
+                return Result.error(400, "结束日期格式错误，应为 yyyy-MM-dd");
+            }
         }
         Page<SyncLog> result = syncLogMapper.selectPage(new Page<>(page, size), wrapper);
         return Result.success(result);
