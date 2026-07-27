@@ -33,4 +33,20 @@ public interface GitSyncClient {
     default String fetchApprovalStatus(String projectPath, Long mrIid) {
         return "pending";
     }
+
+    default boolean rerunCI(String projectPath, Long mrIid) {
+        return false;
+    }
+
+    default boolean assignReviewer(String projectPath, Long mrIid, List<String> reviewers) {
+        return false;
+    }
+
+    default boolean remindReviewers(String projectPath, Long mrIid, List<String> reviewers) {
+        return false;
+    }
+
+    default boolean reopenMR(String projectPath, Long mrIid) {
+        return false;
+    }
 }

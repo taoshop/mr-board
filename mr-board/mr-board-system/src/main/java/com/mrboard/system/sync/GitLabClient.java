@@ -273,6 +273,126 @@ public class GitLabClient implements GitSyncClient {
         }
     }
 
+    @Override
+    public boolean reopenMR(String projectPath, Long mrIid) {
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid;
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.set("PRIVATE-TOKEN", accessToken);
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        org.springframework.http.HttpEntity<Map> entity = new org.springframework.http.HttpEntity<>(
+                Map.of("state_event", "reopen"), headers
+        );
+        try {
+            restTemplate.exchange(url, org.springframework.http.HttpMethod.PUT, entity, Map.class);
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to reopen MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台重新打开失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to reopen MR !{}: {}", mrIid, e.getMessage());
+            throw new GitPlatformException(500, "Git平台重新打开失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public boolean rerunCI(String projectPath, Long mrIid) {
+        String encodedPath = projectPath.replace("/", "%2F");
+        try {
+            // 先获取 MR 关联的最新 pipeline
+            String pipelinesUrl = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/pipelines";
+            org.springframework.http.ResponseEntity<List> response = restTemplate.exchange(
+                    pipelinesUrl, org.springframework.http.HttpMethod.GET, createEntity(), List.class
+            );
+            List<Map<String, Object>> pipelines = response.getBody();
+            if (pipelines == null || pipelines.isEmpty()) {
+                throw new GitPlatformException(404, "该MR暂无CI Pipeline");
+            }
+            String pipelineId = String.valueOf(pipelines.get(0).get("id"));
+            String retryUrl = apiBaseUrl + "/projects/" + encodedPath + "/pipelines/" + pipelineId + "/retry";
+            restTemplate.exchange(retryUrl, org.springframework.http.HttpMethod.POST, createEntity(), Map.class);
+            return true;
+        } catch (GitPlatformException e) {
+            throw e;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to rerun CI for MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台重跑CI失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to rerun CI for MR !{}: {}", mrIid, e.getMessage());
+            throw new GitPlatformException(500, "Git平台重跑CI失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public boolean assignReviewer(String projectPath, Long mrIid, List<String> reviewers) {
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid;
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.set("PRIVATE-TOKEN", accessToken);
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        // 先查询用户ID
+        List<Integer> reviewerIds = new ArrayList<>();
+        for (String username : reviewers) {
+            try {
+                String userUrl = apiBaseUrl + "/users?username=" + username;
+                org.springframework.http.ResponseEntity<List> userResp = restTemplate.exchange(
+                        userUrl, org.springframework.http.HttpMethod.GET, createEntity(), List.class
+                );
+                List<Map<String, Object>> users = userResp.getBody();
+                if (users != null && !users.isEmpty()) {
+                    Object id = users.get(0).get("id");
+                    reviewerIds.add(((Number) id).intValue());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to resolve user id for {}: {}", username, e.getMessage());
+            }
+        }
+        if (reviewerIds.isEmpty()) {
+            throw new GitPlatformException(400, "无法解析指定的Reviewer用户");
+        }
+        org.springframework.http.HttpEntity<Map> entity = new org.springframework.http.HttpEntity<>(
+                Map.of("reviewer_ids", reviewerIds), headers
+        );
+        try {
+            restTemplate.exchange(url, org.springframework.http.HttpMethod.PUT, entity, Map.class);
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to assign reviewers to MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台指派Reviewer失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to assign reviewers to MR !{}: {}", mrIid, e.getMessage());
+            throw new GitPlatformException(500, "Git平台指派Reviewer失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public boolean remindReviewers(String projectPath, Long mrIid, List<String> reviewers) {
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/notes";
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.set("PRIVATE-TOKEN", accessToken);
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        String mentions = reviewers.stream().map(r -> "@" + r).collect(Collectors.joining(" "));
+        String body = mentions + " 请尽快评审此MR，谢谢！";
+        org.springframework.http.HttpEntity<Map> entity = new org.springframework.http.HttpEntity<>(
+                Map.of("body", body), headers
+        );
+        try {
+            restTemplate.exchange(url, org.springframework.http.HttpMethod.POST, entity, Map.class);
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to remind reviewers for MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台提醒Reviewer失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to remind reviewers for MR !{}: {}", mrIid, e.getMessage());
+            throw new GitPlatformException(500, "Git平台提醒Reviewer失败: " + e.getMessage(), e);
+        }
+    }
+
     private org.springframework.http.HttpEntity<Void> createEntity() {
         org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
         headers.set("PRIVATE-TOKEN", accessToken);

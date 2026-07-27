@@ -206,7 +206,7 @@
 import { ref, onMounted, reactive, onUnmounted, computed } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
-import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges, getMrComments } from '@/api/board'
+import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges, getMrComments, rerunMrCi, assignMrReviewer, remindMrReviewers, reopenMr } from '@/api/board'
 import type { CiJob, StatusHistory, ChangeItem, CommentItem } from '@/api/board'
 import { useUserStore } from '@/stores/user'
 import MrCard from '@/components/MrCard.vue'
@@ -728,20 +728,89 @@ function openInPlatform(mr: Mr) {
   if (mr.webUrl) window.open(mr.webUrl, '_blank')
 }
 
-function quickRerunCi(_mr: Mr) {
-  ElMessage.info('重跑 CI 功能开发中')
+function quickRerunCi(mr: Mr) {
+  ElMessageBox.confirm(`确定要重跑 MR #${mr.platformMrId} 的 CI 吗？`, '重跑 CI', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'info',
+  }).then(async () => {
+    try {
+      const res = await rerunMrCi(mr.id)
+      if (res.code === 200) {
+        ElMessage.success('CI 重跑指令已发送')
+      } else {
+        throw new Error(res.msg || '重跑 CI 失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '重跑 CI 失败')
+    }
+  }).catch(() => {})
 }
 
-function quickAssignReviewer(_mr: Mr) {
-  ElMessage.info('指派 Reviewer 功能开发中')
+function quickAssignReviewer(mr: Mr) {
+  ElMessageBox.prompt('请输入要指派的 Reviewer 用户名（多个用逗号分隔）', '指派 Reviewer', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    inputPattern: /\S+/,
+    inputErrorMessage: '用户名不能为空',
+  }).then(async ({ value }) => {
+    const reviewers = value.split(',').map((s) => s.trim()).filter(Boolean)
+    if (reviewers.length === 0) {
+      ElMessage.warning('请输入有效的用户名')
+      return
+    }
+    try {
+      const res = await assignMrReviewer(mr.id, reviewers)
+      if (res.code === 200) {
+        ElMessage.success('Reviewer 指派成功')
+        fetchBoard()
+      } else {
+        throw new Error(res.msg || '指派失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '指派 Reviewer 失败')
+    }
+  }).catch(() => {})
 }
 
-function quickRemindReviewer(_mr: Mr) {
-  ElMessage.info('提醒 Reviewer 功能开发中')
+function quickRemindReviewer(mr: Mr) {
+  ElMessageBox.confirm(`确定要提醒 MR #${mr.platformMrId} 的 Reviewer 吗？`, '提醒 Reviewer', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'info',
+  }).then(async () => {
+    try {
+      const res = await remindMrReviewers(mr.id)
+      if (res.code === 200) {
+        ElMessage.success('提醒已发送')
+      } else {
+        throw new Error(res.msg || '提醒失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '提醒 Reviewer 失败')
+    }
+  }).catch(() => {})
 }
 
-function quickReopen(_mr: Mr) {
-  ElMessage.info('重新打开功能开发中')
+function quickReopen(mr: Mr) {
+  ElMessageBox.confirm(`确定要重新打开 MR #${mr.platformMrId} 吗？`, '重新打开 MR', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(async () => {
+    try {
+      const res = await reopenMr(mr.id)
+      if (res.code === 200) {
+        ElMessage.success('MR 已重新打开')
+        detailVisible.value = false
+        fetchBoard()
+      } else {
+        throw new Error(res.msg || '重新打开失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '重新打开 MR 失败')
+    }
+  }).catch(() => {})
 }
 
 function startAutoRefresh() {

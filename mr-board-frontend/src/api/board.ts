@@ -107,6 +107,22 @@ export function updateMrStatus(id: number, boardStatus: string) {
   return request.put(`/mrs/${id}/status`, { boardStatus }) as Promise<any>
 }
 
+export function rerunMrCi(id: number) {
+  return request.post(`/mrs/${id}/rerun-ci`) as Promise<any>
+}
+
+export function assignMrReviewer(id: number, reviewers: string[]) {
+  return request.post(`/mrs/${id}/assign-reviewer`, { reviewers }) as Promise<any>
+}
+
+export function remindMrReviewers(id: number) {
+  return request.post(`/mrs/${id}/remind-reviewers`) as Promise<any>
+}
+
+export function reopenMr(id: number) {
+  return request.post(`/mrs/${id}/reopen`) as Promise<any>
+}
+
 export interface CommentItem {
   id: number
   mrId: number

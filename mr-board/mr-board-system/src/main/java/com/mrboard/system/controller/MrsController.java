@@ -11,6 +11,7 @@ import com.mrboard.system.entity.MrStatusHistory;
 import com.mrboard.system.entity.Mrs;
 import com.mrboard.system.entity.Project;
 import com.mrboard.system.entity.User;
+import com.mrboard.system.exception.GitPlatformException;
 import com.mrboard.system.mapper.CiJobMapper;
 import com.mrboard.system.mapper.GitSourceMapper;
 import com.mrboard.system.mapper.MrCommentMapper;
@@ -218,30 +219,6 @@ public class MrsController {
         return Result.success();
     }
 
-    private String callGitApi(Mrs mr, String newStatus) {
-        Project project = projectMapper.selectById(mr.getProjectId());
-        if (project == null) {
-            return "项目不存在，无法执行Git操作";
-        }
-        GitSource source = gitSourceMapper.selectById(project.getGitSourceId());
-        if (source == null) {
-            return "Git源配置缺失，无法执行Git操作";
-        }
-        try {
-            String token = aesUtil.decrypt(source.getAccessToken());
-            GitSyncClient client = gitClientFactory.create(source.getPlatformType(), source.getApiBaseUrl(), token);
-            if ("merged".equals(newStatus)) {
-                client.mergeMR(project.getProjectPath(), mr.getPlatformMrId());
-            } else {
-                client.closeMR(project.getProjectPath(), mr.getPlatformMrId());
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("Git平台操作异常: {}", e.getMessage(), e);
-            return "Git平台操作失败: " + e.getMessage();
-        }
-    }
-
     private User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -302,5 +279,152 @@ public class MrsController {
         history.setOperatorIp(ip);
         history.setCreatedAt(LocalDateTime.now());
         historyMapper.insert(history);
+    }
+
+    @Operation(summary = "重跑CI", description = "触发Git平台重新执行该MR的CI Pipeline")
+    @PostMapping("/{id}/rerun-ci")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER')")
+    @CacheEvict(value = "board", allEntries = true)
+    public Result<Void> rerunCi(
+            @Parameter(description = "MR主键ID") @PathVariable Long id) {
+        Mrs mr = mrsMapper.selectById(id);
+        if (mr == null) {
+            return Result.error(404, "MR不存在");
+        }
+        String result = callGitApi(mr, (client, projectPath) -> client.rerunCI(projectPath, mr.getPlatformMrId()));
+        if (result != null) {
+            return Result.error(500, result);
+        }
+        return Result.success();
+    }
+
+    @lombok.Data
+    public static class AssignReviewerRequest {
+        private List<String> reviewers;
+    }
+
+    @Operation(summary = "指派Reviewer", description = "在Git平台上为MR指派评审人")
+    @PostMapping("/{id}/assign-reviewer")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER')")
+    @CacheEvict(value = "board", allEntries = true)
+    public Result<Void> assignReviewer(
+            @Parameter(description = "MR主键ID") @PathVariable Long id,
+            @RequestBody AssignReviewerRequest request) {
+        Mrs mr = mrsMapper.selectById(id);
+        if (mr == null) {
+            return Result.error(404, "MR不存在");
+        }
+        if (request.getReviewers() == null || request.getReviewers().isEmpty()) {
+            return Result.error(400, "Reviewer列表不能为空");
+        }
+        String result = callGitApi(mr, (client, projectPath) -> client.assignReviewer(projectPath, mr.getPlatformMrId(), request.getReviewers()));
+        if (result != null) {
+            return Result.error(500, result);
+        }
+        return Result.success();
+    }
+
+    @Operation(summary = "提醒Reviewer", description = "在MR下发表评论@所有Reviewer提醒评审")
+    @PostMapping("/{id}/remind-reviewers")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER')")
+    public Result<Void> remindReviewers(
+            @Parameter(description = "MR主键ID") @PathVariable Long id) {
+        Mrs mr = mrsMapper.selectById(id);
+        if (mr == null) {
+            return Result.error(404, "MR不存在");
+        }
+        List<String> reviewers = mr.getReviewers() != null
+                ? List.of(mr.getReviewers().split(","))
+                : List.of();
+        if (reviewers.isEmpty()) {
+            return Result.error(400, "该MR尚未指派Reviewer");
+        }
+        String result = callGitApi(mr, (client, projectPath) -> client.remindReviewers(projectPath, mr.getPlatformMrId(), reviewers));
+        if (result != null) {
+            return Result.error(500, result);
+        }
+        return Result.success();
+    }
+
+    @Operation(summary = "重新打开MR", description = "将已关闭的MR在Git平台上重新打开")
+    @PostMapping("/{id}/reopen")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
+    @CacheEvict(value = "board", allEntries = true)
+    public Result<Void> reopen(
+            @Parameter(description = "MR主键ID") @PathVariable Long id,
+            HttpServletRequest httpRequest) {
+        Mrs mr = mrsMapper.selectById(id);
+        if (mr == null) {
+            return Result.error(404, "MR不存在");
+        }
+        if (!"closed".equals(mr.getBoardStatus())) {
+            return Result.error(409, "仅已关闭的MR可重新打开");
+        }
+        String result = callGitApi(mr, (client, projectPath) -> client.reopenMR(projectPath, mr.getPlatformMrId()));
+        if (result != null) {
+            return Result.error(500, result);
+        }
+        String oldStatus = mr.getBoardStatus();
+        mr.setBoardStatus("pending_review");
+        mr.setPlatformStatus("opened");
+        mr.setClosedAt(null);
+        mrsMapper.updateById(mr);
+        User currentUser = getCurrentUser();
+        if (currentUser != null) {
+            recordHistory(mr.getId(), oldStatus, "pending_review", currentUser, httpRequest.getRemoteAddr());
+        }
+        return Result.success();
+    }
+
+    private String callGitApi(Mrs mr, GitApiConsumer consumer) {
+        Project project = projectMapper.selectById(mr.getProjectId());
+        if (project == null) {
+            return "项目不存在，无法执行Git操作";
+        }
+        GitSource source = gitSourceMapper.selectById(project.getGitSourceId());
+        if (source == null) {
+            return "Git源配置缺失，无法执行Git操作";
+        }
+        try {
+            String token = aesUtil.decrypt(source.getAccessToken());
+            GitSyncClient client = gitClientFactory.create(source.getPlatformType(), source.getApiBaseUrl(), token);
+            consumer.accept(client, project.getProjectPath());
+            return null;
+        } catch (GitPlatformException e) {
+            log.error("Git平台操作异常: {}", e.getMessage(), e);
+            return "Git平台操作失败: " + e.getMessage();
+        } catch (Exception e) {
+            log.error("Git平台操作异常: {}", e.getMessage(), e);
+            return "Git平台操作失败: " + e.getMessage();
+        }
+    }
+
+    @FunctionalInterface
+    private interface GitApiConsumer {
+        void accept(GitSyncClient client, String projectPath);
+    }
+
+    private String callGitApi(Mrs mr, String newStatus) {
+        Project project = projectMapper.selectById(mr.getProjectId());
+        if (project == null) {
+            return "项目不存在，无法执行Git操作";
+        }
+        GitSource source = gitSourceMapper.selectById(project.getGitSourceId());
+        if (source == null) {
+            return "Git源配置缺失，无法执行Git操作";
+        }
+        try {
+            String token = aesUtil.decrypt(source.getAccessToken());
+            GitSyncClient client = gitClientFactory.create(source.getPlatformType(), source.getApiBaseUrl(), token);
+            if ("merged".equals(newStatus)) {
+                client.mergeMR(project.getProjectPath(), mr.getPlatformMrId());
+            } else {
+                client.closeMR(project.getProjectPath(), mr.getPlatformMrId());
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Git平台操作异常: {}", e.getMessage(), e);
+            return "Git平台操作失败: " + e.getMessage();
+        }
     }
 }
