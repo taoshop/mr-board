@@ -21,6 +21,7 @@ import com.mrboard.system.websocket.SyncStatusMessage;
 import com.mrboard.system.websocket.SyncWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,7 @@ public class SyncService {
     private final SyncLogMapper syncLogMapper;
     private final BoardStatusCalculator boardStatusCalculator;
     private final SyncWebSocketHandler syncWebSocketHandler;
+    private final CacheManager cacheManager;
 
     @Async("syncExecutor")
     @Transactional(rollbackFor = Exception.class)
@@ -241,6 +243,15 @@ public class SyncService {
                 .errorMsg(errorMsg)
                 .timestamp(LocalDateTime.now().toString())
                 .build());
+
+        // 同步成功后清除看板缓存，确保前端立即看到最新数据
+        if ("success".equals(logRecord.getStatus())) {
+            var cache = cacheManager.getCache("board");
+            if (cache != null) {
+                cache.clear();
+                log.debug("Cleared board cache after sync for project {}", projectId);
+            }
+        }
 
         return logRecord;
     }
