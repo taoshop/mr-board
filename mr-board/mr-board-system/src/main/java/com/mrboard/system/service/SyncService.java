@@ -198,6 +198,29 @@ public class SyncService {
                     ciCount++;
                 }
 
+                // 根据拉取的 CI jobs 计算整体 CI 状态并更新 MR
+                String overallCiStatus = calculateOverallCiStatus(ciList);
+                savedMr.setCiStatus(overallCiStatus);
+
+                // 重新计算 boardStatus（ciStatus 已更新）
+                String currentApprovalStatus = savedMr.getApprovalStatus();
+                if (currentApprovalStatus == null) currentApprovalStatus = "pending";
+                List<String> currentReviewers = savedMr.getReviewers() != null
+                        && !savedMr.getReviewers().isEmpty()
+                        ? List.of(savedMr.getReviewers().split(","))
+                        : List.of();
+                String newBoardStatus = boardStatusCalculator.calculate(
+                        savedMr.getPlatformStatus(),
+                        savedMr.getHasConflict(),
+                        overallCiStatus,
+                        savedMr.getMergeable(),
+                        savedMr.getTitle(),
+                        currentApprovalStatus,
+                        currentReviewers
+                );
+                savedMr.setBoardStatus(newBoardStatus);
+                mrsMapper.updateById(savedMr);
+
                 // Fetch and cache MR comments
                 try {
                     List<CommentDTO> comments = client.fetchComments(project.getProjectPath(), dto.getPlatformMrId());
@@ -254,6 +277,19 @@ public class SyncService {
         }
 
         return logRecord;
+    }
+
+    private String calculateOverallCiStatus(List<CiDTO> ciList) {
+        if (ciList == null || ciList.isEmpty()) {
+            return "unknown";
+        }
+        boolean hasRunning = ciList.stream()
+                .anyMatch(ci -> "running".equalsIgnoreCase(ci.getStatus()) || "pending".equalsIgnoreCase(ci.getStatus()));
+        boolean hasFailed = ciList.stream()
+                .anyMatch(ci -> "failed".equalsIgnoreCase(ci.getStatus()));
+        if (hasRunning) return "running";
+        if (hasFailed) return "failed";
+        return "success";
     }
 
     private Mrs saveOrUpdateMr(Long projectId, MrDTO dto) {

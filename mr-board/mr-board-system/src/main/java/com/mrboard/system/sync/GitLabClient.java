@@ -435,6 +435,12 @@ public class GitLabClient implements GitSyncClient {
                     .collect(Collectors.toList()));
         }
 
+        // 解析 head_pipeline 状态作为初始 ciStatus
+        Map<String, Object> headPipeline = (Map<String, Object>) mr.get("head_pipeline");
+        if (headPipeline != null) {
+            dto.setCiStatus(mapCiStatus((String) headPipeline.get("status")));
+        }
+
         return dto;
     }
 
