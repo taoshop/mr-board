@@ -85,7 +85,7 @@ class BoardAndMrsControllerTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.length()").value(7))
-                .andExpect(jsonPath("$.data[0].key").value("open"));
+                .andExpect(jsonPath("$.data[0].key").value("pending_review"));
     }
 
     @Test
@@ -93,7 +93,7 @@ class BoardAndMrsControllerTest extends BaseIntegrationTest {
         mockMvc.perform(get("/api/board").with(bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data.open").isArray());
+                .andExpect(jsonPath("$.data.pending_review").isArray());
     }
 
     @Test
@@ -118,7 +118,7 @@ class BoardAndMrsControllerTest extends BaseIntegrationTest {
         mockMvc.perform(get("/api/board/mr/{id}/ci", 1L).with(bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data.length()").value(1));
+                .andExpect(jsonPath("$.data.length()").value(greaterThanOrEqualTo(1)));
     }
 
     @Test

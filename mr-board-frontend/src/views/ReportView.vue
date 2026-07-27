@@ -40,7 +40,7 @@
 
     <!-- 概览 KPI -->
     <el-row :gutter="16" class="kpi-row">
-      <el-col :xs="24" :sm="12" :md="8" :lg="4" v-for="kpi in kpis" :key="kpi.label">
+      <el-col v-for="kpi in kpis" :key="kpi.label" :xs="24" :sm="12" :md="8" :lg="4">
         <el-card class="kpi-card" shadow="hover">
           <div class="kpi-value" :style="{ color: kpi.color }">{{ kpi.value }}</div>
           <div class="kpi-label">{{ kpi.label }}</div>
@@ -115,8 +115,8 @@ const exportTaskId = ref<string | null>(null)
 let exportTimer: ReturnType<typeof setInterval> | null = null
 
 const trendEmpty = computed(() => !trend.value || trend.value.labels.length === 0)
-const statusEmpty = computed(() => !statusDist || statusDist.value?.labels.length === 0)
-const projectEmpty = computed(() => !projectDist || projectDist.value?.labels.length === 0)
+const statusEmpty = computed(() => !statusDist.value || statusDist.value?.labels.length === 0)
+const projectEmpty = computed(() => !projectDist.value || projectDist.value?.labels.length === 0)
 
 // KPI 卡片数据
 const kpis = computed(() => {

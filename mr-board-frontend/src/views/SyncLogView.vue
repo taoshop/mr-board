@@ -9,17 +9,17 @@
 
       <el-form :inline="true" class="filter-form">
         <el-form-item label="Git 源">
-          <el-select v-model="query.gitSourceId" placeholder="全部" clearable @change="fetchLogs" style="width: 160px">
+          <el-select v-model="query.gitSourceId" placeholder="全部" clearable style="width: 160px" @change="fetchLogs">
             <el-option v-for="s in gitSources" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="项目">
-          <el-select v-model="query.projectId" placeholder="全部" clearable @change="fetchLogs" style="width: 160px">
+          <el-select v-model="query.projectId" placeholder="全部" clearable style="width: 160px" @change="fetchLogs">
             <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="query.status" placeholder="全部" clearable @change="fetchLogs" style="width: 120px">
+          <el-select v-model="query.status" placeholder="全部" clearable style="width: 120px" @change="fetchLogs">
             <el-option label="成功" value="success" />
             <el-option label="失败" value="failed" />
             <el-option label="运行中" value="running" />
@@ -33,13 +33,13 @@
             start-placeholder="开始"
             end-placeholder="结束"
             value-format="YYYY-MM-DD"
-            @change="fetchLogs"
             style="width: 240px"
+            @change="fetchLogs"
           />
         </el-form-item>
       </el-form>
 
-      <el-table :data="logs" v-loading="loading" stripe>
+      <el-table v-loading="loading" :data="logs" stripe>
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="projectId" label="项目 ID" width="90" />
         <el-table-column prop="syncType" label="同步类型" width="100" />

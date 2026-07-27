@@ -1,54 +1,113 @@
 <template>
-  <el-card
-    class="mr-card"
-    :class="['status-' + status, { 'is-conflict': data.hasConflict, 'is-readonly': readOnly }]"
-    shadow="hover"
-    :body-style="{ padding: '10px 12px' }"
-    @click="handleCardClick"
+  <el-tooltip
+    :disabled="!showConflictTooltip"
+    content="已批准但不可合并：可能是分支保护规则或需要变基"
+    placement="top"
   >
-    <div class="card-header">
-      <el-tag size="small" :type="tagType" effect="light">{{ statusLabel }}</el-tag>
-      <span class="mr-id">#{{ data.platformMrId }}</span>
-    </div>
-    <div class="title" :title="data.title">{{ data.title }}</div>
-    <div class="meta">
-      <div class="author">
-        <el-avatar :size="18" :src="data.authorAvatar" />
-        <span class="name">{{ data.authorName }}</span>
-        <span v-if="reviewers.length" class="reviewers">
-          <el-icon><User /></el-icon>
-          <span class="reviewer-names">{{ reviewers.join(', ') }}</span>
+    <el-card
+      class="mr-card"
+      :class="['status-' + status, { 'is-conflict': data.hasConflict, 'is-readonly': readOnly }]"
+      shadow="hover"
+      :body-style="{ padding: '10px 12px' }"
+      :draggable="draggable"
+      @dragstart="$emit('dragstart', $event)"
+      @mousedown="onMouseDown"
+      @click="handleCardClick"
+    >
+      <div class="card-header">
+        <div class="status-wrap">
+          <!-- CI 状态小圆点（头部标识） -->
+          <span
+            v-if="data.ciStatus === 'running' || data.ciStatus === 'pending' || data.ciStatus === 'failed'"
+            class="ci-dot"
+            :class="'ci-' + data.ciStatus"
+            :title="ciTooltip"
+          >
+            <el-icon v-if="data.ciStatus === 'running'" class="is-loading"><Loading /></el-icon>
+            <el-icon v-else-if="data.ciStatus === 'pending'"><Minus /></el-icon>
+            <el-icon v-else-if="data.ciStatus === 'failed'"><CircleClose /></el-icon>
+          </span>
+          <el-tag size="small" :type="tagType" effect="light">{{ statusLabel }}</el-tag>
+        </div>
+        <span class="mr-id">#{{ data.platformMrId }}</span>
+      </div>
+      <div class="title" :title="data.title">{{ data.title }}</div>
+      <!-- 伪就绪提示（ready 列但 CI 未通过） -->
+      <div v-if="pseudoReadyText" class="pseudo-ready">
+        <el-icon><Warning /></el-icon>
+        <span>{{ pseudoReadyText }}</span>
+      </div>
+      <!-- Reviewer 状态行 -->
+      <div v-if="reviewers.length" class="reviewer-line">
+        <div class="reviewer-list">
+          <div v-for="r in reviewers" :key="r" class="reviewer-item" :title="r">
+            <el-avatar :size="20">{{ r.charAt(0).toUpperCase() }}</el-avatar>
+            <span class="reviewer-name">{{ r }}</span>
+          </div>
+        </div>
+        <span class="approval-badge" :class="'approval-' + (data.approvalStatus || 'pending')" :title="approvalLabel">
+          <el-icon v-if="data.approvalStatus === 'approved'"><CircleCheck /></el-icon>
+          <el-icon v-else-if="data.approvalStatus === 'changes_requested'"><CircleClose /></el-icon>
+          <el-icon v-else><Timer /></el-icon>
         </span>
       </div>
-      <div class="branch" :title="data.sourceBranch + ' → ' + data.targetBranch">
-        <el-icon><Link /></el-icon>
-        <span class="branch-name">{{ data.sourceBranch }}</span>
-        <el-icon><ArrowRight /></el-icon>
-        <span class="branch-name">{{ data.targetBranch }}</span>
+      <div v-if="status === 'conflict'" class="conflict-reasons">
+        <el-tag v-if="data.hasConflict" size="small" type="danger" effect="dark">
+          <el-icon><Warning /></el-icon> 代码冲突
+        </el-tag>
+        <el-tag v-else-if="data.ciStatus === 'failed'" size="small" type="danger" effect="dark">
+          <el-icon><CircleClose /></el-icon> CI 失败
+        </el-tag>
+        <el-tag v-else-if="data.mergeable === false" size="small" type="warning" effect="dark">
+          <el-icon><Lock /></el-icon> 需变基/保护规则
+        </el-tag>
       </div>
-    </div>
-    <div class="footer">
-      <div class="stats">
-        <span v-if="data.commentsCount" class="stat">
-          <el-icon><ChatLineRound /></el-icon>{{ data.commentsCount }}
-        </span>
-        <span v-if="data.changesCount" class="stat">
-          <el-icon><Document /></el-icon>{{ data.changesCount }}
-        </span>
+      <div class="meta">
+        <div class="author">
+          <el-avatar :size="18" :src="data.authorAvatar" />
+          <span class="name">{{ data.authorName }}</span>
+          <span v-if="reviewers.length" class="reviewers">
+            <el-icon><User /></el-icon>
+            <span class="reviewer-names">{{ reviewers.join(', ') }}</span>
+          </span>
+        </div>
+        <div class="branch" :title="data.sourceBranch + ' → ' + data.targetBranch">
+          <el-icon><Link /></el-icon>
+          <span class="branch-name">{{ data.sourceBranch }}</span>
+          <el-icon><ArrowRight /></el-icon>
+          <span class="branch-name">{{ data.targetBranch }}</span>
+        </div>
       </div>
-      <div class="ci" v-if="data.ciStatus">
-        <CiStatusIcon :status="data.ciStatus" :size="14" />
+      <!-- CI 摘要（running/pending/failed 时常驻显示） -->
+      <div v-if="ciSummaryText" class="ci-summary">
+        <el-icon v-if="data.ciStatus === 'running'" class="is-loading"><Loading /></el-icon>
+        <el-icon v-else-if="data.ciStatus === 'pending'"><Minus /></el-icon>
+        <el-icon v-else-if="data.ciStatus === 'failed'"><CircleClose /></el-icon>
+        <span>{{ ciSummaryText }}</span>
       </div>
-    </div>
-    <div class="actions" v-if="!readOnly">
-      <el-button link size="small" @click.stop="$emit('view', data)">查看详情</el-button>
-    </div>
-  </el-card>
+      <div class="footer">
+        <div class="stats">
+          <span v-if="data.commentsCount" class="stat">
+            <el-icon><ChatLineRound /></el-icon>{{ data.commentsCount }}
+          </span>
+          <span v-if="data.changesCount" class="stat">
+            <el-icon><Document /></el-icon>{{ data.changesCount }}
+          </span>
+        </div>
+        <div v-if="data.ciStatus" class="ci">
+          <CiStatusIcon :status="data.ciStatus" :size="14" />
+        </div>
+      </div>
+      <div v-if="!readOnly" class="actions">
+        <el-button link size="small" @click.stop="$emit('view', data)">查看详情</el-button>
+      </div>
+    </el-card>
+  </el-tooltip>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Link, ArrowRight, ChatLineRound, Document, User } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
+import { Link, ArrowRight, ChatLineRound, Document, User, Loading, Minus, CircleClose, Warning, Lock, CircleCheck, Timer } from '@element-plus/icons-vue'
 import CiStatusIcon from './CiStatusIcon.vue'
 import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
@@ -65,6 +124,7 @@ interface MrData {
   commentsCount?: number
   changesCount?: number
   hasConflict?: boolean
+  mergeable?: boolean
   webUrl?: string
   reviewers?: string
   approvalStatus?: string
@@ -73,9 +133,10 @@ interface MrData {
 const props = defineProps<{
   data: MrData
   readOnly?: boolean
+  draggable?: boolean
 }>()
 
-const emit = defineEmits(['view'])
+const emit = defineEmits(['view', 'dragstart'])
 
 const status = computed(() => props.data.boardStatus || 'pending_review')
 const statusLabel = computed(() => getStatusLabel(status.value))
@@ -86,7 +147,67 @@ const reviewers = computed(() => {
   return props.data.reviewers.split(',').filter(Boolean)
 })
 
-function handleCardClick() {
+const approvalLabel = computed(() => {
+  const map: Record<string, string> = {
+    approved: '已通过',
+    changes_requested: '需修改',
+    reviewing: '评审中',
+    pending: '待评审',
+  }
+  return map[props.data.approvalStatus || ''] || '待评审'
+})
+
+const ciTooltip = computed(() => {
+  const map: Record<string, string> = {
+    running: 'CI 运行中',
+    pending: 'CI 等待中',
+    failed: 'CI 失败',
+  }
+  return map[props.data.ciStatus || ''] || ''
+})
+
+const ciSummaryText = computed(() => {
+  const map: Record<string, string> = {
+    running: 'CI 运行中',
+    pending: 'CI 等待中',
+    failed: 'CI 失败，请检查日志',
+  }
+  return map[props.data.ciStatus || ''] || ''
+})
+
+const pseudoReadyText = computed(() => {
+  if (status.value !== 'ready') return ''
+  const map: Record<string, string> = {
+    running: 'CI 仍在运行，暂不可合并',
+    pending: 'CI 等待中，暂不可合并',
+    failed: 'CI 未通过，暂不可合并',
+  }
+  return map[props.data.ciStatus || ''] || ''
+})
+
+const showConflictTooltip = computed(() => {
+  return status.value === 'conflict'
+    && props.data.approvalStatus === 'approved'
+    && props.data.mergeable === false
+})
+
+// click / drag 冲突检测：mousedown 与 click 时鼠标位移超过阈值则认为是拖拽，不触发点击
+const DRAG_THRESHOLD = 5
+const mouseDownPos = ref<{ x: number; y: number } | null>(null)
+
+function onMouseDown(e: MouseEvent) {
+  mouseDownPos.value = { x: e.clientX, y: e.clientY }
+}
+
+function handleCardClick(e: MouseEvent) {
+  if (mouseDownPos.value) {
+    const dx = Math.abs(e.clientX - mouseDownPos.value.x)
+    const dy = Math.abs(e.clientY - mouseDownPos.value.y)
+    if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+      // 拖拽过程中，阻止 click 打开详情
+      return
+    }
+  }
   emit('view', props.data)
 }
 </script>
@@ -126,7 +247,6 @@ function handleCardClick() {
 
   &.status-pending_review { border-left-color: #909399; }
   &.status-reviewing { border-left-color: #e6a23c; }
-  &.status-ci_checking { border-left-color: #409eff; }
   &.status-conflict { border-left-color: #f56c6c; }
   &.status-ready { border-left-color: #67c23a; }
   &.status-merged { border-left-color: #409eff; }
@@ -137,6 +257,33 @@ function handleCardClick() {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 6px;
+
+    .status-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ci-dot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      font-size: 12px;
+
+      &.ci-running {
+        color: #e6a23c;
+      }
+
+      &.ci-pending {
+        color: #909399;
+      }
+
+      &.ci-failed {
+        color: #f56c6c;
+      }
+    }
 
     .mr-id {
       font-size: 12px;
@@ -155,6 +302,77 @@ function handleCardClick() {
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     line-height: 1.4;
+  }
+
+  .pseudo-ready {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    background: #fdf6ec;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #e6a23c;
+
+    .el-icon {
+      font-size: 14px;
+    }
+  }
+
+  .reviewer-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+
+    .reviewer-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+
+      .reviewer-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        .el-avatar {
+          font-size: 10px;
+          background: #e4e7ed;
+          color: #606266;
+        }
+
+        .reviewer-name {
+          font-size: 11px;
+          color: #606266;
+        }
+      }
+    }
+
+    .approval-badge {
+      font-size: 14px;
+
+      &.approval-approved { color: #67c23a; }
+      &.approval-changes_requested { color: #f56c6c; }
+      &.approval-pending,
+      &.approval-reviewing { color: #909399; }
+    }
+  }
+
+  .conflict-reasons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: #fdf2f2;
+    border-radius: 4px;
+
+    .el-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
   }
 
   .meta {
@@ -205,6 +423,22 @@ function handleCardClick() {
         white-space: nowrap;
         max-width: 80px;
       }
+    }
+  }
+
+  .ci-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding: 4px 8px;
+    background: #f5f7fa;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #606266;
+
+    .el-icon {
+      font-size: 12px;
     }
   }
 

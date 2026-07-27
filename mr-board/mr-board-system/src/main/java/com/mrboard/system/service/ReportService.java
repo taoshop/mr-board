@@ -317,7 +317,6 @@ public class ReportService {
         return switch (key) {
             case "pending_review" -> "待 Review";
             case "reviewing" -> "Review 中";
-            case "ci_checking" -> "CI 检查中";
             case "conflict" -> "冲突待解决";
             case "ready" -> "可合并";
             case "merged" -> "已合并";

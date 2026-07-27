@@ -61,7 +61,7 @@ export const useUserStore = defineStore(
   {
     persist: {
       key: 'mr-board-user',
-      pick: ['accessToken', 'refreshToken', 'userInfo', 'mustChangePassword'],
+      paths: ['accessToken', 'refreshToken', 'userInfo', 'mustChangePassword'],
     },
   }
 )

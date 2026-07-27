@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS mrs (
     source_branch   VARCHAR(128) NOT NULL COMMENT '源分支',
     target_branch   VARCHAR(128) NOT NULL COMMENT '目标分支',
     platform_status VARCHAR(32)      NOT NULL COMMENT '平台状态：opened/merged/closed',
-    board_status    VARCHAR(32)      NOT NULL COMMENT '看板状态：pending_review/reviewing/ci_checking/conflict/ready/merged/closed',
+    board_status    VARCHAR(32)      NOT NULL COMMENT '看板状态：pending_review/reviewing/conflict/ready/merged/closed',
     ci_status       VARCHAR(32)      DEFAULT 'unknown' COMMENT 'CI状态：unknown/running/success/failed/canceled',
     has_conflict    TINYINT          DEFAULT 0 COMMENT '是否有冲突：0=否, 1=是',
     mergeable       TINYINT          DEFAULT 0 COMMENT '是否可合并：0=否, 1=是',

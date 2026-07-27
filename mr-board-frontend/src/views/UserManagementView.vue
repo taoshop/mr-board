@@ -11,7 +11,7 @@
         </div>
       </template>
 
-      <el-table :data="userList" v-loading="loading" stripe @selection-change="handleSelectionChange">
+      <el-table v-loading="loading" :data="userList" stripe @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="username" label="用户名" />

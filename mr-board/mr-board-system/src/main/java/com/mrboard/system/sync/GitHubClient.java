@@ -237,13 +237,18 @@ public class GitHubClient implements GitSyncClient {
 
             boolean hasApproved = false;
             boolean hasChangesRequested = false;
+            boolean hasMeaningfulReview = false;
 
             for (Map<String, Object> review : reviews) {
                 String state = (String) review.get("state");
                 if ("APPROVED".equalsIgnoreCase(state)) {
                     hasApproved = true;
+                    hasMeaningfulReview = true;
                 } else if ("CHANGES_REQUESTED".equalsIgnoreCase(state)) {
                     hasChangesRequested = true;
+                    hasMeaningfulReview = true;
+                } else if (!"COMMENTED".equalsIgnoreCase(state)) {
+                    hasMeaningfulReview = true;
                 }
             }
 
@@ -253,10 +258,125 @@ public class GitHubClient implements GitSyncClient {
             if (hasChangesRequested) {
                 return "reviewing";
             }
-            return "reviewing"; // 有 review 记录但未 approved / changes_requested（如 COMMENTED）
+            return hasMeaningfulReview ? "reviewing" : "pending_review";
         } catch (Exception e) {
             log.warn("Failed to fetch approval status from GitHub: {}", e.getMessage());
             return "pending";
+        }
+    }
+
+    @Override
+    public boolean reopenMR(String repoFullName, Long prNumber) {
+        String url = apiBaseUrl + "/repos/" + repoFullName + "/pulls/" + prNumber;
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "token " + accessToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map> entity = new HttpEntity<>(Map.of("state", "open"), headers);
+            restTemplate.exchange(url, HttpMethod.PATCH, entity, Map.class);
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to reopen PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台重新打开失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to reopen PR #{}: {}", prNumber, e.getMessage());
+            throw new GitPlatformException(500, "Git平台重新打开失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public boolean rerunCI(String repoFullName, Long prNumber) {
+        try {
+            // GitHub 需要先获取 PR 的 head sha，再获取 check suite id，然后重跑
+            String prUrl = apiBaseUrl + "/repos/" + repoFullName + "/pulls/" + prNumber;
+            ResponseEntity<Map> prResponse = restTemplate.exchange(prUrl, HttpMethod.GET, createEntity(), Map.class);
+            Map<String, Object> prBody = prResponse.getBody();
+            if (prBody == null) {
+                throw new GitPlatformException(404, "PR不存在");
+            }
+            Map<String, Object> head = (Map<String, Object>) prBody.get("head");
+            if (head == null) {
+                throw new GitPlatformException(404, "无法获取PR head信息");
+            }
+            String sha = (String) head.get("sha");
+            if (sha == null) {
+                throw new GitPlatformException(404, "无法获取PR commit sha");
+            }
+
+            // 获取 check suites
+            String suitesUrl = apiBaseUrl + "/repos/" + repoFullName + "/commits/" + sha + "/check-suites";
+            HttpEntity<Void> entity = createEntity("application/vnd.github+json");
+            ResponseEntity<Map> suitesResponse = restTemplate.exchange(suitesUrl, HttpMethod.GET, entity, Map.class);
+            Map<String, Object> suitesBody = suitesResponse.getBody();
+            if (suitesBody == null) {
+                throw new GitPlatformException(404, "暂无CI Check Suite");
+            }
+            List<Map<String, Object>> checkSuites = (List<Map<String, Object>>) suitesBody.get("check_suites");
+            if (checkSuites == null || checkSuites.isEmpty()) {
+                throw new GitPlatformException(404, "暂无CI Check Suite");
+            }
+            Long suiteId = ((Number) checkSuites.get(0).get("id")).longValue();
+
+            // 重跑 check suite
+            String rerunUrl = apiBaseUrl + "/repos/" + repoFullName + "/check-suites/" + suiteId + "/rerequest";
+            HttpHeaders rerunHeaders = new HttpHeaders();
+            rerunHeaders.set("Authorization", "token " + accessToken);
+            rerunHeaders.set("Accept", "application/vnd.github+json");
+            HttpEntity<Void> rerunEntity = new HttpEntity<>(rerunHeaders);
+            restTemplate.exchange(rerunUrl, HttpMethod.POST, rerunEntity, Map.class);
+            return true;
+        } catch (GitPlatformException e) {
+            throw e;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to rerun CI for PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台重跑CI失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to rerun CI for PR #{}: {}", prNumber, e.getMessage());
+            throw new GitPlatformException(500, "Git平台重跑CI失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public boolean assignReviewer(String repoFullName, Long prNumber, List<String> reviewers) {
+        String url = apiBaseUrl + "/repos/" + repoFullName + "/pulls/" + prNumber + "/requested_reviewers";
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "token " + accessToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map> entity = new HttpEntity<>(Map.of("reviewers", reviewers), headers);
+            restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to assign reviewers to PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台指派Reviewer失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to assign reviewers to PR #{}: {}", prNumber, e.getMessage());
+            throw new GitPlatformException(500, "Git平台指派Reviewer失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public boolean remindReviewers(String repoFullName, Long prNumber, List<String> reviewers) {
+        String url = apiBaseUrl + "/repos/" + repoFullName + "/issues/" + prNumber + "/comments";
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "token " + accessToken);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            String mentions = reviewers.stream().map(r -> "@" + r).collect(Collectors.joining(" "));
+            String body = mentions + " 请尽快评审此PR，谢谢！";
+            HttpEntity<Map> entity = new HttpEntity<>(Map.of("body", body), headers);
+            restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to remind reviewers for PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台提醒Reviewer失败: " + e.getStatusCode());
+        } catch (Exception e) {
+            log.error("Failed to remind reviewers for PR #{}: {}", prNumber, e.getMessage());
+            throw new GitPlatformException(500, "Git平台提醒Reviewer失败: " + e.getMessage(), e);
         }
     }
 

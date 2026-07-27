@@ -21,6 +21,7 @@ import com.mrboard.system.websocket.SyncStatusMessage;
 import com.mrboard.system.websocket.SyncWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,11 +44,25 @@ public class SyncService {
     private final SyncLogMapper syncLogMapper;
     private final BoardStatusCalculator boardStatusCalculator;
     private final SyncWebSocketHandler syncWebSocketHandler;
+    private final CacheManager cacheManager;
 
     @Async("syncExecutor")
     @Transactional(rollbackFor = Exception.class)
     public void triggerSyncAsync(Long gitSourceId, boolean full, String triggerType) {
-        triggerSync(gitSourceId, full, triggerType);
+        LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Project::getGitSourceId, gitSourceId).eq(Project::getIsActive, 1);
+        List<Project> projects = projectMapper.selectList(wrapper);
+        for (Project project : projects) {
+            try {
+                if (full) {
+                    project.setLastSyncAt(null);
+                    projectMapper.updateById(project);
+                }
+                syncProject(project.getId(), triggerType);
+            } catch (Exception e) {
+                log.error("Trigger sync failed for project {}: {}", project.getId(), e.getMessage());
+            }
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -183,6 +198,29 @@ public class SyncService {
                     ciCount++;
                 }
 
+                // 根据拉取的 CI jobs 计算整体 CI 状态并更新 MR
+                String overallCiStatus = calculateOverallCiStatus(ciList);
+                savedMr.setCiStatus(overallCiStatus);
+
+                // 重新计算 boardStatus（ciStatus 已更新）
+                String currentApprovalStatus = savedMr.getApprovalStatus();
+                if (currentApprovalStatus == null) currentApprovalStatus = "pending";
+                List<String> currentReviewers = savedMr.getReviewers() != null
+                        && !savedMr.getReviewers().isEmpty()
+                        ? List.of(savedMr.getReviewers().split(","))
+                        : List.of();
+                String newBoardStatus = boardStatusCalculator.calculate(
+                        savedMr.getPlatformStatus(),
+                        savedMr.getHasConflict(),
+                        overallCiStatus,
+                        savedMr.getMergeable(),
+                        savedMr.getTitle(),
+                        currentApprovalStatus,
+                        currentReviewers
+                );
+                savedMr.setBoardStatus(newBoardStatus);
+                mrsMapper.updateById(savedMr);
+
                 // Fetch and cache MR comments
                 try {
                     List<CommentDTO> comments = client.fetchComments(project.getProjectPath(), dto.getPlatformMrId());
@@ -229,7 +267,29 @@ public class SyncService {
                 .timestamp(LocalDateTime.now().toString())
                 .build());
 
+        // 同步成功后清除看板缓存，确保前端立即看到最新数据
+        if ("success".equals(logRecord.getStatus())) {
+            var cache = cacheManager.getCache("board");
+            if (cache != null) {
+                cache.clear();
+                log.debug("Cleared board cache after sync for project {}", projectId);
+            }
+        }
+
         return logRecord;
+    }
+
+    private String calculateOverallCiStatus(List<CiDTO> ciList) {
+        if (ciList == null || ciList.isEmpty()) {
+            return "unknown";
+        }
+        boolean hasRunning = ciList.stream()
+                .anyMatch(ci -> "running".equalsIgnoreCase(ci.getStatus()) || "pending".equalsIgnoreCase(ci.getStatus()));
+        boolean hasFailed = ciList.stream()
+                .anyMatch(ci -> "failed".equalsIgnoreCase(ci.getStatus()));
+        if (hasRunning) return "running";
+        if (hasFailed) return "failed";
+        return "success";
     }
 
     private Mrs saveOrUpdateMr(Long projectId, MrDTO dto) {
@@ -277,6 +337,8 @@ public class SyncService {
 
         if (existing != null) {
             entity.setId(existing.getId());
+            entity.setReviewers(existing.getReviewers());
+            entity.setApprovalStatus(existing.getApprovalStatus());
             mrsMapper.updateById(entity);
             return entity;
         } else {

@@ -1,64 +1,87 @@
 <template>
   <div class="board-page">
     <div class="filter-bar">
-      <el-select v-model="filters.projectId" placeholder="项目" clearable multiple collapse-tags @change="onFilterChange" style="width: 200px">
+      <el-select v-model="filters.projectId" placeholder="项目" clearable multiple collapse-tags style="width: 200px" @change="onFilterChange">
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags @change="onFilterChange" style="width: 200px">
+      <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags style="width: 200px" @change="onFilterChange">
         <el-option label="待 Review" value="pending_review" />
         <el-option label="Review 中" value="reviewing" />
-        <el-option label="CI 检查中" value="ci_checking" />
         <el-option label="冲突待解决" value="conflict" />
         <el-option label="可合并" value="ready" />
         <el-option label="已合并" value="merged" />
         <el-option label="已关闭" value="closed" />
       </el-select>
-      <el-input v-model="filters.author" placeholder="作者" clearable @input="onFilterChange" style="width: 140px" />
-      <el-input v-model="filters.branch" placeholder="目标分支" clearable @input="onFilterChange" style="width: 160px" />
+      <el-input v-model="filters.author" placeholder="作者" clearable style="width: 140px" @input="onFilterChange" />
+      <el-input v-model="filters.branch" placeholder="目标分支" clearable style="width: 160px" @input="onFilterChange" />
       <el-button @click="resetFilters">重置</el-button>
       <el-button type="primary" :icon="Refresh" @click="fetchBoard">刷新</el-button>
     </div>
 
     <!-- 骨架屏：初始加载时展示 -->
     <div v-if="initialLoading" class="skeleton-board">
-      <div v-for="i in 7" :key="i" class="skeleton-column">
+      <div v-for="i in 6" :key="i" class="skeleton-column">
         <el-skeleton :rows="3" animated />
       </div>
     </div>
 
-    <div v-else class="kanban-board" v-loading="loading">
+    <div v-else v-loading="loading" class="kanban-board">
       <div
         v-for="col in columns"
         :key="col.key"
         class="kanban-column"
-        :class="{ 'drag-over': dragOverColumn === col.key }"
+        :class="[
+          dragOverState?.column === col.key
+            ? (dragOverState.allowed
+                ? (dragOverState.conditional ? 'drag-conditional' : 'drag-allowed')
+                : 'drag-forbidden')
+            : '',
+        ]"
         :style="{ borderTopColor: col.color }"
       >
         <div class="column-header">
           <span class="column-title" :style="{ color: col.color }">{{ col.label }}</span>
           <el-tag size="small" type="info">{{ boardData[col.key]?.length || 0 }}</el-tag>
         </div>
+        <div v-if="columnStats[col.key]?.length" class="column-stats">
+          <span
+            v-for="s in columnStats[col.key]"
+            :key="s.label"
+            class="stat-item"
+            :style="{ color: s.color }"
+          >
+            {{ s.label }}: {{ s.value }}
+          </span>
+        </div>
         <div
           class="column-body"
+          :title="dragOverState?.column === col.key && dragOverState.reason ? dragOverState.reason : ''"
           @dragover.prevent="handleDragOver(col.key)"
           @dragleave="handleDragLeave(col.key)"
           @drop="handleDrop(col.key, $event)"
         >
-          <RecycleScroller
+          <DynamicScroller
             class="scroller"
             :items="boardData[col.key] || []"
-            :item-size="160"
+            :min-item-size="160"
             key-field="id"
-            v-slot="{ item }"
           >
-            <MrCard
-              :data="item"
-              :readOnly="!canDrag(item)"
-              :draggable="canDrag(item)"
-              @dragstart="handleDragStart(item, $event)"
-              @view="openDetail"
-            />
-          </RecycleScroller>
+            <template #default="{ item, index, active }">
+              <DynamicScrollerItem
+                :item="item"
+                :active="active"
+                :data-index="index"
+              >
+                <MrCard
+                  :data="item"
+                  :read-only="!canDrag(item)"
+                  :draggable="canDrag(item)"
+                  @dragstart="handleDragStart(item, $event)"
+                  @view="openDetail"
+                />
+              </DynamicScrollerItem>
+            </template>
+          </DynamicScroller>
           <el-empty v-if="!boardData[col.key]?.length" description="暂无数据" :image-size="60" />
         </div>
       </div>
@@ -66,6 +89,18 @@
 
     <el-drawer v-model="detailVisible" title="MR 详情" size="45%" :with-header="true">
       <div v-if="selectedMr" v-loading="detailLoading">
+        <!-- 快捷操作栏 -->
+        <div class="quick-actions">
+          <el-button
+            v-for="action in quickActions"
+            :key="action.key"
+            :type="action.type || ''"
+            size="small"
+            @click="action.handler"
+          >
+            {{ action.label }}
+          </el-button>
+        </div>
         <el-tabs v-model="detailTab">
           <!-- 基本信息 -->
           <el-tab-pane label="基本信息" name="info">
@@ -171,7 +206,7 @@
 import { ref, onMounted, reactive, onUnmounted, computed } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
-import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges, getMrComments } from '@/api/board'
+import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges, getMrComments, rerunMrCi, assignMrReviewer, remindMrReviewers, reopenMr } from '@/api/board'
 import type { CiJob, StatusHistory, ChangeItem, CommentItem } from '@/api/board'
 import { useUserStore } from '@/stores/user'
 import MrCard from '@/components/MrCard.vue'
@@ -197,8 +232,11 @@ interface Mr {
   commentsCount?: number
   changesCount?: number
   hasConflict?: boolean
+  mergeable?: boolean
   platformStatus?: string
   webUrl?: string
+  reviewers?: string
+  approvalStatus?: string
 }
 
 interface ProjectOption {
@@ -233,7 +271,13 @@ const AUTO_REFRESH_INTERVAL = 60_000
 
 // 拖拽状态
 const draggingItem = ref<Mr | null>(null)
-const dragOverColumn = ref<string | null>(null)
+interface DragOverState {
+  column: string
+  allowed: boolean
+  conditional?: boolean
+  reason?: string
+}
+const dragOverState = ref<DragOverState | null>(null)
 
 const currentUser = computed(() => userStore.userInfo)
 const userRoles = computed(() => currentUser.value?.roles || [])
@@ -242,6 +286,83 @@ const isAdminOrTechlead = computed(() =>
 )
 const isDeveloper = computed(() => userRoles.value.includes('developer'))
 const isReviewer = computed(() => userRoles.value.includes('reviewer'))
+
+const columnStats = computed(() => {
+  const stats: Record<
+    string,
+    { label: string; value: number; color?: string }[]
+  > = {}
+  for (const col of columns.value) {
+    const list = boardData.value[col.key] || []
+    const items: { label: string; value: number; color?: string }[] = []
+
+    switch (col.key) {
+      case 'pending_review': {
+        const noReviewer = list.filter((m) => !m.reviewers).length
+        const ciRunning = list.filter(
+          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
+        ).length
+        if (noReviewer)
+          items.push({ label: '未指派', value: noReviewer, color: '#909399' })
+        if (ciRunning)
+          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
+        break
+      }
+      case 'reviewing': {
+        const approved = list.filter(
+          (m) => m.approvalStatus === 'approved'
+        ).length
+        const changesReq = list.filter(
+          (m) => m.approvalStatus === 'changes_requested'
+        ).length
+        const pending = list.filter(
+          (m) =>
+            !m.approvalStatus ||
+            m.approvalStatus === 'pending' ||
+            m.approvalStatus === 'reviewing'
+        ).length
+        const ciRunning = list.filter(
+          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
+        ).length
+        if (approved)
+          items.push({ label: '已通过', value: approved, color: '#67c23a' })
+        if (changesReq)
+          items.push({ label: '需修改', value: changesReq, color: '#f56c6c' })
+        if (pending)
+          items.push({ label: '待评审', value: pending, color: '#909399' })
+        if (ciRunning)
+          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
+        break
+      }
+      case 'conflict': {
+        const conflict = list.filter((m) => m.hasConflict).length
+        const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
+        const notMergeable = list.filter(
+          (m) =>
+            m.mergeable === false &&
+            !m.hasConflict &&
+            m.ciStatus !== 'failed'
+        ).length
+        if (conflict)
+          items.push({ label: '冲突', value: conflict, color: '#f56c6c' })
+        if (ciFailed)
+          items.push({ label: 'CI失败', value: ciFailed, color: '#f56c6c' })
+        if (notMergeable)
+          items.push({ label: '需变基', value: notMergeable, color: '#e6a23c' })
+        break
+      }
+      case 'ready':
+        items.push({ label: '可合并', value: list.length, color: '#67c23a' })
+        break
+      case 'merged':
+      case 'closed':
+        items.push({ label: '总计', value: list.length, color: col.color })
+        break
+    }
+    stats[col.key] = items
+  }
+  return stats
+})
 
 function canDrag(mr: Mr): boolean {
   if (isReviewer.value) return false
@@ -386,18 +507,31 @@ function handleDragStart(mr: Mr, event: DragEvent) {
 }
 
 function handleDragOver(columnKey: string) {
-  dragOverColumn.value = columnKey
+  const mr = draggingItem.value
+  if (!mr) return
+  if (dragOverState.value?.column === columnKey) return
+
+  const error = canDrop(mr, columnKey)
+  if (error) {
+    dragOverState.value = { column: columnKey, allowed: false, reason: error }
+  } else if (columnKey === 'ready') {
+    dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '需 CI 通过 + Review 通过 + 无冲突方可合并' }
+  } else if (columnKey === 'merged') {
+    dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '此操作将同步到 Git 平台，请二次确认' }
+  } else {
+    dragOverState.value = { column: columnKey, allowed: true }
+  }
 }
 
 function handleDragLeave(columnKey: string) {
-  if (dragOverColumn.value === columnKey) {
-    dragOverColumn.value = null
+  if (dragOverState.value?.column === columnKey) {
+    dragOverState.value = null
   }
 }
 
 async function handleDrop(targetStatus: string, event: DragEvent) {
   event.preventDefault()
-  dragOverColumn.value = null
+  dragOverState.value = null
   const mr = draggingItem.value
   draggingItem.value = null
   if (!mr) return
@@ -480,6 +614,205 @@ function changeTagType(status: string): string {
   return map[status] || 'info'
 }
 
+interface QuickAction {
+  key: string
+  label: string
+  type?: '' | 'primary' | 'success' | 'warning' | 'danger'
+  visible: boolean
+  handler: () => void
+}
+
+const quickActions = computed(() => {
+  const mr = selectedMr.value
+  if (!mr) return []
+
+  const actions: QuickAction[] = []
+
+  actions.push({
+    key: 'merge',
+    label: '一键合并',
+    type: 'success',
+    visible: mr.boardStatus === 'ready' && isAdminOrTechlead.value,
+    handler: () => quickMerge(mr),
+  })
+
+  actions.push({
+    key: 'close',
+    label: '关闭 MR',
+    type: 'danger',
+    visible:
+      mr.boardStatus !== 'merged' &&
+      mr.boardStatus !== 'closed' &&
+      isAdminOrTechlead.value,
+    handler: () => quickClose(mr),
+  })
+
+  actions.push({
+    key: 'rerun-ci',
+    label: '重跑 CI',
+    type: 'primary',
+    visible: mr.boardStatus !== 'merged' && mr.boardStatus !== 'closed',
+    handler: () => quickRerunCi(mr),
+  })
+
+  actions.push({
+    key: 'assign-reviewer',
+    label: '指派 Reviewer',
+    type: 'primary',
+    visible: mr.boardStatus === 'pending_review',
+    handler: () => quickAssignReviewer(mr),
+  })
+
+  actions.push({
+    key: 'remind-reviewer',
+    label: '提醒 Reviewer',
+    type: 'primary',
+    visible: mr.boardStatus === 'reviewing',
+    handler: () => quickRemindReviewer(mr),
+  })
+
+  actions.push({
+    key: 'open-platform',
+    label: '在平台打开',
+    visible: !!mr.webUrl,
+    handler: () => openInPlatform(mr),
+  })
+
+  actions.push({
+    key: 'reopen',
+    label: '重新打开',
+    visible: mr.boardStatus === 'closed' && isAdminOrTechlead.value,
+    handler: () => quickReopen(mr),
+  })
+
+  return actions.filter((a) => a.visible)
+})
+
+async function quickMerge(mr: Mr) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将 MR #${mr.platformMrId} 合并到 ${mr.targetBranch} 吗？`,
+      '一键合并',
+      { confirmButtonText: '合并', cancelButtonText: '取消', type: 'success' }
+    )
+    const res = await updateMrStatus(mr.id, 'merged')
+    if (res.code === 200) {
+      ElMessage.success('合并成功')
+      detailVisible.value = false
+      fetchBoard()
+    }
+  } catch {
+    /* 取消 */
+  }
+}
+
+async function quickClose(mr: Mr) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要关闭 MR #${mr.platformMrId} 吗？`,
+      '关闭 MR',
+      { confirmButtonText: '关闭', cancelButtonText: '取消', type: 'warning' }
+    )
+    const res = await updateMrStatus(mr.id, 'closed')
+    if (res.code === 200) {
+      ElMessage.success('关闭成功')
+      detailVisible.value = false
+      fetchBoard()
+    }
+  } catch {
+    /* 取消 */
+  }
+}
+
+function openInPlatform(mr: Mr) {
+  if (mr.webUrl) window.open(mr.webUrl, '_blank')
+}
+
+function quickRerunCi(mr: Mr) {
+  ElMessageBox.confirm(`确定要重跑 MR #${mr.platformMrId} 的 CI 吗？`, '重跑 CI', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'info',
+  }).then(async () => {
+    try {
+      const res = await rerunMrCi(mr.id)
+      if (res.code === 200) {
+        ElMessage.success('CI 重跑指令已发送')
+      } else {
+        throw new Error(res.msg || '重跑 CI 失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '重跑 CI 失败')
+    }
+  }).catch(() => {})
+}
+
+function quickAssignReviewer(mr: Mr) {
+  ElMessageBox.prompt('请输入要指派的 Reviewer 用户名（多个用逗号分隔）', '指派 Reviewer', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    inputPattern: /\S+/,
+    inputErrorMessage: '用户名不能为空',
+  }).then(async ({ value }) => {
+    const reviewers = value.split(',').map((s) => s.trim()).filter(Boolean)
+    if (reviewers.length === 0) {
+      ElMessage.warning('请输入有效的用户名')
+      return
+    }
+    try {
+      const res = await assignMrReviewer(mr.id, reviewers)
+      if (res.code === 200) {
+        ElMessage.success('Reviewer 指派成功')
+        fetchBoard()
+      } else {
+        throw new Error(res.msg || '指派失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '指派 Reviewer 失败')
+    }
+  }).catch(() => {})
+}
+
+function quickRemindReviewer(mr: Mr) {
+  ElMessageBox.confirm(`确定要提醒 MR #${mr.platformMrId} 的 Reviewer 吗？`, '提醒 Reviewer', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'info',
+  }).then(async () => {
+    try {
+      const res = await remindMrReviewers(mr.id)
+      if (res.code === 200) {
+        ElMessage.success('提醒已发送')
+      } else {
+        throw new Error(res.msg || '提醒失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '提醒 Reviewer 失败')
+    }
+  }).catch(() => {})
+}
+
+function quickReopen(mr: Mr) {
+  ElMessageBox.confirm(`确定要重新打开 MR #${mr.platformMrId} 吗？`, '重新打开 MR', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(async () => {
+    try {
+      const res = await reopenMr(mr.id)
+      if (res.code === 200) {
+        ElMessage.success('MR 已重新打开')
+        detailVisible.value = false
+        fetchBoard()
+      } else {
+        throw new Error(res.msg || '重新打开失败')
+      }
+    } catch (e: any) {
+      ElMessage.error(e.message || '重新打开 MR 失败')
+    }
+  }).catch(() => {})
+}
+
 function startAutoRefresh() {
   stopAutoRefresh()
   autoRefreshTimer = setInterval(() => {
@@ -560,8 +893,17 @@ onUnmounted(() => {
         flex: 0 0 220px;
       }
 
-      &.drag-over {
-        box-shadow: 0 0 0 2px #409eff;
+      &.drag-allowed {
+        box-shadow: 0 0 0 2px #67c23a;
+      }
+
+      &.drag-conditional {
+        box-shadow: 0 0 0 2px #e6a23c;
+      }
+
+      &.drag-forbidden {
+        box-shadow: 0 0 0 2px #f56c6c;
+        opacity: 0.85;
       }
 
       .column-header {
@@ -577,6 +919,19 @@ onUnmounted(() => {
         }
       }
 
+      .column-stats {
+        padding: 6px 16px;
+        border-bottom: 1px solid #ebeef5;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+
+        .stat-item {
+          font-size: 11px;
+          font-weight: 500;
+        }
+      }
+
       .column-body {
         flex: 1;
         overflow-y: auto;
@@ -587,6 +942,15 @@ onUnmounted(() => {
         }
       }
     }
+  }
+
+  .quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #ebeef5;
   }
 
   .desc-author {
