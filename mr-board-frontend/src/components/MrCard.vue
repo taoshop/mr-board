@@ -32,6 +32,11 @@
         <span class="mr-id">#{{ data.platformMrId }}</span>
       </div>
       <div class="title" :title="data.title">{{ data.title }}</div>
+      <!-- 伪就绪提示（ready 列但 CI 未通过） -->
+      <div class="pseudo-ready" v-if="pseudoReadyText">
+        <el-icon><Warning /></el-icon>
+        <span>{{ pseudoReadyText }}</span>
+      </div>
       <!-- Reviewer 状态行 -->
       <div class="reviewer-line" v-if="reviewers.length">
         <div class="reviewer-list">
@@ -72,6 +77,13 @@
           <el-icon><ArrowRight /></el-icon>
           <span class="branch-name">{{ data.targetBranch }}</span>
         </div>
+      </div>
+      <!-- CI 摘要（running/pending/failed 时常驻显示） -->
+      <div class="ci-summary" v-if="ciSummaryText">
+        <el-icon v-if="data.ciStatus === 'running'" class="is-loading"><Loading /></el-icon>
+        <el-icon v-else-if="data.ciStatus === 'pending'"><Minus /></el-icon>
+        <el-icon v-else-if="data.ciStatus === 'failed'"><CircleClose /></el-icon>
+        <span>{{ ciSummaryText }}</span>
       </div>
       <div class="footer">
         <div class="stats">
@@ -154,48 +166,29 @@ const ciTooltip = computed(() => {
   return map[props.data.ciStatus || ''] || ''
 })
 
-const approvalLabel = computed(() => {
+const ciSummaryText = computed(() => {
   const map: Record<string, string> = {
-    approved: '评审通过',
-    changes_requested: '需修改',
-    reviewing: '评审中',
-    pending: '待评审',
+    running: 'CI 运行中',
+    pending: 'CI 等待中',
+    failed: 'CI 失败，请检查日志',
   }
-  return map[props.data.approvalStatus || ''] || '待评审'
+  return map[props.data.ciStatus || ''] || ''
 })
 
-const approvalLabel = computed(() => {
+const pseudoReadyText = computed(() => {
+  if (status.value !== 'ready') return ''
   const map: Record<string, string> = {
-    approved: '已通过',
-    changes_requested: '需修改',
-    reviewing: '评审中',
-    pending: '待评审',
+    running: 'CI 仍在运行，暂不可合并',
+    pending: 'CI 等待中，暂不可合并',
+    failed: 'CI 未通过，暂不可合并',
   }
-  return map[props.data.approvalStatus || ''] || '待评审'
+  return map[props.data.ciStatus || ''] || ''
 })
 
-const approvalLabel = computed(() => {
-  const map: Record<string, string> = {
-    approved: '已通过',
-    changes_requested: '需修改',
-    reviewing: '评审中',
-    pending: '待评审',
-  }
-  return map[props.data.approvalStatus || ''] || '待评审'
-})
+const showConflictTooltip = computed(() => {
   return status.value === 'conflict'
     && props.data.approvalStatus === 'approved'
     && props.data.mergeable === false
-})
-
-const approvalLabel = computed(() => {
-  const map: Record<string, string> = {
-    approved: '已批准',
-    changes_requested: '需修改',
-    reviewing: '评审中',
-    pending: '待评审',
-  }
-  return map[props.data.approvalStatus || ''] || '待评审'
 })
 
 // click / drag 冲突检测：mousedown 与 click 时鼠标位移超过阈值则认为是拖拽，不触发点击
@@ -311,6 +304,22 @@ function handleCardClick(e: MouseEvent) {
     line-height: 1.4;
   }
 
+  .pseudo-ready {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    background: #fdf6ec;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #e6a23c;
+
+    .el-icon {
+      font-size: 14px;
+    }
+  }
+
   .reviewer-line {
     display: flex;
     align-items: center;
@@ -414,6 +423,22 @@ function handleCardClick(e: MouseEvent) {
         white-space: nowrap;
         max-width: 80px;
       }
+    }
+  }
+
+  .ci-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding: 4px 8px;
+    background: #f5f7fa;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #606266;
+
+    .el-icon {
+      font-size: 12px;
     }
   }
 
