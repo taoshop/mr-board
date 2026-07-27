@@ -89,6 +89,18 @@
 
     <el-drawer v-model="detailVisible" title="MR 详情" size="45%" :with-header="true">
       <div v-if="selectedMr" v-loading="detailLoading">
+        <!-- 快捷操作栏 -->
+        <div class="quick-actions">
+          <el-button
+            v-for="action in quickActions"
+            :key="action.key"
+            :type="action.type || ''"
+            size="small"
+            @click="action.handler"
+          >
+            {{ action.label }}
+          </el-button>
+        </div>
         <el-tabs v-model="detailTab">
           <!-- 基本信息 -->
           <el-tab-pane label="基本信息" name="info">
@@ -602,6 +614,136 @@ function changeTagType(status: string): string {
   return map[status] || 'info'
 }
 
+interface QuickAction {
+  key: string
+  label: string
+  type?: '' | 'primary' | 'success' | 'warning' | 'danger'
+  visible: boolean
+  handler: () => void
+}
+
+const quickActions = computed(() => {
+  const mr = selectedMr.value
+  if (!mr) return []
+
+  const actions: QuickAction[] = []
+
+  actions.push({
+    key: 'merge',
+    label: '一键合并',
+    type: 'success',
+    visible: mr.boardStatus === 'ready' && isAdminOrTechlead.value,
+    handler: () => quickMerge(mr),
+  })
+
+  actions.push({
+    key: 'close',
+    label: '关闭 MR',
+    type: 'danger',
+    visible:
+      mr.boardStatus !== 'merged' &&
+      mr.boardStatus !== 'closed' &&
+      isAdminOrTechlead.value,
+    handler: () => quickClose(mr),
+  })
+
+  actions.push({
+    key: 'rerun-ci',
+    label: '重跑 CI',
+    type: 'primary',
+    visible: mr.boardStatus !== 'merged' && mr.boardStatus !== 'closed',
+    handler: () => quickRerunCi(mr),
+  })
+
+  actions.push({
+    key: 'assign-reviewer',
+    label: '指派 Reviewer',
+    type: 'primary',
+    visible: mr.boardStatus === 'pending_review',
+    handler: () => quickAssignReviewer(mr),
+  })
+
+  actions.push({
+    key: 'remind-reviewer',
+    label: '提醒 Reviewer',
+    type: 'primary',
+    visible: mr.boardStatus === 'reviewing',
+    handler: () => quickRemindReviewer(mr),
+  })
+
+  actions.push({
+    key: 'open-platform',
+    label: '在平台打开',
+    visible: !!mr.webUrl,
+    handler: () => openInPlatform(mr),
+  })
+
+  actions.push({
+    key: 'reopen',
+    label: '重新打开',
+    visible: mr.boardStatus === 'closed' && isAdminOrTechlead.value,
+    handler: () => quickReopen(mr),
+  })
+
+  return actions.filter((a) => a.visible)
+})
+
+async function quickMerge(mr: Mr) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要将 MR #${mr.platformMrId} 合并到 ${mr.targetBranch} 吗？`,
+      '一键合并',
+      { confirmButtonText: '合并', cancelButtonText: '取消', type: 'success' }
+    )
+    const res = await updateMrStatus(mr.id, 'merged')
+    if (res.code === 200) {
+      ElMessage.success('合并成功')
+      detailVisible.value = false
+      fetchBoard()
+    }
+  } catch {
+    /* 取消 */
+  }
+}
+
+async function quickClose(mr: Mr) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要关闭 MR #${mr.platformMrId} 吗？`,
+      '关闭 MR',
+      { confirmButtonText: '关闭', cancelButtonText: '取消', type: 'warning' }
+    )
+    const res = await updateMrStatus(mr.id, 'closed')
+    if (res.code === 200) {
+      ElMessage.success('关闭成功')
+      detailVisible.value = false
+      fetchBoard()
+    }
+  } catch {
+    /* 取消 */
+  }
+}
+
+function openInPlatform(mr: Mr) {
+  if (mr.webUrl) window.open(mr.webUrl, '_blank')
+}
+
+function quickRerunCi(_mr: Mr) {
+  ElMessage.info('重跑 CI 功能开发中')
+}
+
+function quickAssignReviewer(_mr: Mr) {
+  ElMessage.info('指派 Reviewer 功能开发中')
+}
+
+function quickRemindReviewer(_mr: Mr) {
+  ElMessage.info('提醒 Reviewer 功能开发中')
+}
+
+function quickReopen(_mr: Mr) {
+  ElMessage.info('重新打开功能开发中')
+}
+
 function startAutoRefresh() {
   stopAutoRefresh()
   autoRefreshTimer = setInterval(() => {
@@ -731,6 +873,15 @@ onUnmounted(() => {
         }
       }
     }
+  }
+
+  .quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #ebeef5;
   }
 
   .desc-author {
