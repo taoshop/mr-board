@@ -16,7 +16,8 @@ import java.util.List;
  *   <li>platformStatus == "closed" → 已关闭 (closed)</li>
  *   <li>title startsWith "draft:" / "wip:" → 待 Review (pending_review)</li>
  *   <li>hasConflict == true → 冲突待解决 (conflict)</li>
- *   <li>ciStatus == "running"/"pending"/"failed" → CI检查中 (ci_checking)</li>
+ *   <li>ciStatus == "running"/"pending" → CI检查中 (ci_checking)</li>
+ *   <li>ciStatus == "failed" → 冲突待解决 (conflict)</li>
  *   <li>无 reviewer 或 approvalStatus == "pending" → 待 Review (pending_review)</li>
  *   <li>approvalStatus == "changes_requested"/"reviewing" → Review中 (reviewing)</li>
  *   <li>approvalStatus == "approved" 且 mergeable == true → 可合并 (ready)</li>
@@ -82,6 +83,11 @@ public class BoardStatusCalculator {
         // CI 失败直接阻塞合并
         if (ciFailed) {
             return "conflict";
+        }
+
+        // CI 运行中/等待中 → CI 检查中
+        if (ciRunning) {
+            return "ci_checking";
         }
 
         // 5. Review 状态（CI running/pending 时不单独成列，继续按 Review 状态判断）
