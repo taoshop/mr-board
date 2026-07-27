@@ -1,5 +1,6 @@
 package com.mrboard.system.sync;
 
+import com.mrboard.system.exception.GitPlatformException;
 import com.mrboard.system.sync.dto.CiDTO;
 import com.mrboard.system.sync.dto.ChangeDTO;
 import com.mrboard.system.sync.dto.CommentDTO;
@@ -18,6 +19,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class GitLabClient implements GitSyncClient {
@@ -182,9 +185,13 @@ public class GitLabClient implements GitSyncClient {
         try {
             restTemplate.exchange(url, org.springframework.http.HttpMethod.PUT, createEntity(), Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to merge MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to merge MR: {}", e.getMessage());
-            return false;
+            log.error("Failed to merge MR !{}: {}", mrIid, e.getMessage());
+            throw new GitPlatformException(500, "Git平台合并失败: " + e.getMessage(), e);
         }
     }
 
@@ -201,9 +208,68 @@ public class GitLabClient implements GitSyncClient {
         try {
             restTemplate.exchange(url, org.springframework.http.HttpMethod.PUT, entity, Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractGitLabError(e.getResponseBodyAsString());
+            log.error("Failed to close MR !{}: {} - {}", mrIid, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to close MR: {}", e.getMessage());
-            return false;
+            log.error("Failed to close MR !{}: {}", mrIid, e.getMessage());
+            throw new GitPlatformException(500, "Git平台关闭失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<String> fetchReviewers(String projectPath, Long mrIid) {
+        List<String> reviewers = new ArrayList<>();
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid;
+        try {
+            org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, createEntity(), Map.class
+            );
+            Map<String, Object> body = response.getBody();
+            if (body == null) return reviewers;
+            List<Map<String, Object>> reviewerList = (List<Map<String, Object>>) body.get("reviewers");
+            if (reviewerList != null) {
+                for (Map<String, Object> item : reviewerList) {
+                    String username = (String) item.get("username");
+                    if (username != null) {
+                        reviewers.add(username);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch reviewers from GitLab: {}", e.getMessage());
+        }
+        return reviewers;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public String fetchApprovalStatus(String projectPath, Long mrIid) {
+        String encodedPath = projectPath.replace("/", "%2F");
+        String url = apiBaseUrl + "/projects/" + encodedPath + "/merge_requests/" + mrIid + "/approvals";
+        try {
+            org.springframework.http.ResponseEntity<Map> response = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, createEntity(), Map.class
+            );
+            Map<String, Object> body = response.getBody();
+            if (body == null) return "pending";
+
+            Boolean approved = (Boolean) body.get("approved");
+            List<Map<String, Object>> approvedBy = (List<Map<String, Object>>) body.get("approved_by");
+
+            if (Boolean.TRUE.equals(approved)) {
+                return "approved";
+            }
+            if (approvedBy != null && !approvedBy.isEmpty()) {
+                return "reviewing";
+            }
+            return "pending";
+        } catch (Exception e) {
+            log.warn("Failed to fetch approval status from GitLab: {}", e.getMessage());
+            return "pending";
         }
     }
 
@@ -240,6 +306,15 @@ public class GitLabClient implements GitSyncClient {
         dto.setUpdatedAt(parseDateTime((String) mr.get("updated_at")));
         dto.setMergedAt(parseDateTime((String) mr.get("merged_at")));
         dto.setClosedAt(parseDateTime((String) mr.get("closed_at")));
+
+        List<Map<String, Object>> reviewers = (List<Map<String, Object>>) mr.get("reviewers");
+        if (reviewers != null) {
+            dto.setReviewers(reviewers.stream()
+                    .map(r -> (String) r.get("username"))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
+        }
+
         return dto;
     }
 
@@ -281,6 +356,17 @@ public class GitLabClient implements GitSyncClient {
             log.warn("Failed to fetch comments from GitLab: {}", e.getMessage());
         }
         return results;
+    }
+
+    private String extractGitLabError(String json) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = mapper.readValue(json, Map.class);
+            Object msg = map.get("message");
+            if (msg != null) return msg.toString();
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private LocalDateTime parseDateTime(String value) {

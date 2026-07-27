@@ -28,6 +28,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Tag(name = "MR管理", description = "MR列表查询、MR详情、MR关联CI记录")
 @RestController
 @RequestMapping("/api/mrs")
@@ -228,18 +230,15 @@ public class MrsController {
         try {
             String token = aesUtil.decrypt(source.getAccessToken());
             GitSyncClient client = gitClientFactory.create(source.getPlatformType(), source.getApiBaseUrl(), token);
-            boolean success;
             if ("merged".equals(newStatus)) {
-                success = client.mergeMR(project.getProjectPath(), mr.getPlatformMrId());
+                client.mergeMR(project.getProjectPath(), mr.getPlatformMrId());
             } else {
-                success = client.closeMR(project.getProjectPath(), mr.getPlatformMrId());
-            }
-            if (!success) {
-                return "Git平台操作失败，请检查Token权限或MR状态";
+                client.closeMR(project.getProjectPath(), mr.getPlatformMrId());
             }
             return null;
         } catch (Exception e) {
-            return "Git平台操作异常: " + e.getMessage();
+            log.error("Git平台操作异常: {}", e.getMessage(), e);
+            return "Git平台操作失败: " + e.getMessage();
         }
     }
 

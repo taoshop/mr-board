@@ -5,13 +5,13 @@
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
       <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags @change="onFilterChange" style="width: 200px">
-        <el-option label="开发中" value="open" />
-        <el-option label="测试中" value="testing" />
+        <el-option label="待 Review" value="pending_review" />
+        <el-option label="Review 中" value="reviewing" />
+        <el-option label="CI 检查中" value="ci_checking" />
+        <el-option label="冲突待解决" value="conflict" />
         <el-option label="可合并" value="ready" />
-        <el-option label="冲突" value="conflict" />
         <el-option label="已合并" value="merged" />
         <el-option label="已关闭" value="closed" />
-        <el-option label="构建失败" value="failed" />
       </el-select>
       <el-input v-model="filters.author" placeholder="作者" clearable @input="onFilterChange" style="width: 140px" />
       <el-input v-model="filters.branch" placeholder="目标分支" clearable @input="onFilterChange" style="width: 160px" />
@@ -47,7 +47,7 @@
           <RecycleScroller
             class="scroller"
             :items="boardData[col.key] || []"
-            :item-size="120"
+            :item-size="160"
             key-field="id"
             v-slot="{ item }"
           >
@@ -176,6 +176,7 @@ import type { CiJob, StatusHistory, ChangeItem, CommentItem } from '@/api/board'
 import { useUserStore } from '@/stores/user'
 import MrCard from '@/components/MrCard.vue'
 import CiStatusIcon from '@/components/CiStatusIcon.vue'
+import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
 interface Column {
   key: string
@@ -404,7 +405,7 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
 
   const dropError = canDrop(mr, targetStatus)
   if (dropError) {
-    ElMessage.warning(dropError)
+    ElMessage.warning({ message: dropError, duration: 5000 })
     return
   }
 
@@ -438,9 +439,9 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
     if (res.code !== 200) {
       throw new Error(res.data.msg || '状态更新失败')
     }
-    ElMessage.success('状态更新成功')
+    ElMessage.success({ message: '状态更新成功', duration: 5000 })
   } catch (e: any) {
-    // 回滚
+    // 回滚（错误提示由 request 拦截器统一显示）
     const currentList = boardData.value[targetStatus] || []
     const idx = currentList.findIndex((m) => m.id === mr.id)
     if (idx > -1) {
@@ -448,34 +449,15 @@ async function handleDrop(targetStatus: string, event: DragEvent) {
     }
     mr.boardStatus = oldStatus
     sourceList.splice(sourceIdx > -1 ? sourceIdx : 0, 0, mr)
-    ElMessage.error(e.message || '状态更新失败')
   }
 }
 
 function statusLabel(status: string): string {
-  const map: Record<string, string> = {
-    open: '开发中',
-    testing: '测试中',
-    ready: '可合并',
-    conflict: '冲突',
-    merged: '已合并',
-    closed: '已关闭',
-    failed: '构建失败',
-  }
-  return map[status] || status
+  return getStatusLabel(status)
 }
 
 function tagType(status: string): string {
-  const map: Record<string, string> = {
-    open: 'info',
-    testing: 'warning',
-    ready: 'success',
-    conflict: 'danger',
-    merged: 'primary',
-    closed: 'info',
-    failed: 'danger',
-  }
-  return map[status] || 'info'
+  return getStatusTagType(status)
 }
 
 function changeLabel(status: string): string {

@@ -1,5 +1,6 @@
 package com.mrboard.system.sync;
 
+import com.mrboard.system.exception.GitPlatformException;
 import com.mrboard.system.sync.dto.CiDTO;
 import com.mrboard.system.sync.dto.ChangeDTO;
 import com.mrboard.system.sync.dto.CommentDTO;
@@ -17,6 +18,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class GitHubClient implements GitSyncClient {
@@ -167,9 +170,13 @@ public class GitHubClient implements GitSyncClient {
             HttpEntity<Map> entity = new HttpEntity<>(Map.of("merge_method", "merge"), headers);
             restTemplate.exchange(url, HttpMethod.PUT, entity, Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to merge PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台合并失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to merge PR: {}", e.getMessage());
-            return false;
+            log.error("Failed to merge PR #{}: {}", prNumber, e.getMessage());
+            throw new GitPlatformException(500, "Git平台合并失败: " + e.getMessage(), e);
         }
     }
 
@@ -183,9 +190,73 @@ public class GitHubClient implements GitSyncClient {
             HttpEntity<Map> entity = new HttpEntity<>(Map.of("state", "closed"), headers);
             restTemplate.exchange(url, HttpMethod.PATCH, entity, Map.class);
             return true;
+        } catch (org.springframework.web.client.HttpClientErrorException | org.springframework.web.client.HttpServerErrorException e) {
+            String detail = extractErrorMessage(e.getResponseBodyAsString());
+            log.error("Failed to close PR #{}: {} - {}", prNumber, e.getStatusCode(), detail);
+            throw new GitPlatformException(e.getStatusCode().value(), detail != null ? detail : "Git平台关闭失败: " + e.getStatusCode());
         } catch (Exception e) {
-            log.error("Failed to close PR: {}", e.getMessage());
-            return false;
+            log.error("Failed to close PR #{}: {}", prNumber, e.getMessage());
+            throw new GitPlatformException(500, "Git平台关闭失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<String> fetchReviewers(String projectPath, Long mrIid) {
+        List<String> reviewers = new ArrayList<>();
+        String url = apiBaseUrl + "/repos/" + projectPath + "/pulls/" + mrIid;
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body == null) return reviewers;
+            List<Map<String, Object>> requestedReviewers = (List<Map<String, Object>>) body.get("requested_reviewers");
+            if (requestedReviewers != null) {
+                for (Map<String, Object> item : requestedReviewers) {
+                    String login = (String) item.get("login");
+                    if (login != null) {
+                        reviewers.add(login);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch requested reviewers from GitHub: {}", e.getMessage());
+        }
+        return reviewers;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public String fetchApprovalStatus(String projectPath, Long mrIid) {
+        String url = apiBaseUrl + "/repos/" + projectPath + "/pulls/" + mrIid + "/reviews";
+        try {
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, createEntity(), List.class);
+            List<Map<String, Object>> reviews = response.getBody();
+            if (reviews == null || reviews.isEmpty()) {
+                return "pending";
+            }
+
+            boolean hasApproved = false;
+            boolean hasChangesRequested = false;
+
+            for (Map<String, Object> review : reviews) {
+                String state = (String) review.get("state");
+                if ("APPROVED".equalsIgnoreCase(state)) {
+                    hasApproved = true;
+                } else if ("CHANGES_REQUESTED".equalsIgnoreCase(state)) {
+                    hasChangesRequested = true;
+                }
+            }
+
+            if (hasApproved && !hasChangesRequested) {
+                return "approved";
+            }
+            if (hasChangesRequested) {
+                return "reviewing";
+            }
+            return "reviewing"; // 有 review 记录但未 approved / changes_requested（如 COMMENTED）
+        } catch (Exception e) {
+            log.warn("Failed to fetch approval status from GitHub: {}", e.getMessage());
+            return "pending";
         }
     }
 
@@ -233,6 +304,15 @@ public class GitHubClient implements GitSyncClient {
         dto.setUpdatedAt(parseDateTime((String) pr.get("updated_at")));
         dto.setMergedAt(parseDateTime((String) pr.get("merged_at")));
         dto.setClosedAt(parseDateTime((String) pr.get("closed_at")));
+
+        List<Map<String, Object>> requestedReviewers = (List<Map<String, Object>>) pr.get("requested_reviewers");
+        if (requestedReviewers != null) {
+            dto.setReviewers(requestedReviewers.stream()
+                    .map(r -> (String) r.get("login"))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
+        }
+
         return dto;
     }
 
@@ -285,6 +365,17 @@ public class GitHubClient implements GitSyncClient {
             log.warn("Failed to fetch comments from GitHub: {}", e.getMessage());
         }
         return results;
+    }
+
+    private String extractErrorMessage(String json) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> map = mapper.readValue(json, Map.class);
+            Object msg = map.get("message");
+            if (msg != null) return msg.toString();
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private LocalDateTime parseDateTime(String value) {

@@ -20,6 +20,8 @@ export interface Mr {
   changesCount?: number
   platformStatus?: string
   webUrl?: string
+  reviewers?: string
+  approvalStatus?: string
 }
 
 export interface MrPageParams {

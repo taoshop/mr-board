@@ -33,6 +33,8 @@ public class Mrs {
     private Integer commentsCount;
     private String labels;
     private String webUrl;
+    private String reviewers;
+    private String approvalStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime mergedAt;

@@ -14,6 +14,7 @@ public class MrDTO {
     private String authorAvatar;
     private String assigneeName;
     private List<String> reviewers;
+    private String approvalStatus;
     private String sourceBranch;
     private String targetBranch;
     private String platformStatus;
@@ -25,9 +26,9 @@ public class MrDTO {
     private Integer commentsCount;
     private List<String> labels;
     private String webUrl;
+    private String ciStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime mergedAt;
     private LocalDateTime closedAt;
-    private String ciStatus;
 }

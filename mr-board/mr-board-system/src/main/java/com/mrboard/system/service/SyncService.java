@@ -22,6 +22,7 @@ import com.mrboard.system.websocket.SyncWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -42,6 +43,12 @@ public class SyncService {
     private final SyncLogMapper syncLogMapper;
     private final BoardStatusCalculator boardStatusCalculator;
     private final SyncWebSocketHandler syncWebSocketHandler;
+
+    @Async("syncExecutor")
+    @Transactional(rollbackFor = Exception.class)
+    public void triggerSyncAsync(Long gitSourceId, boolean full, String triggerType) {
+        triggerSync(gitSourceId, full, triggerType);
+    }
 
     @Transactional(rollbackFor = Exception.class)
     public void triggerSync(Long gitSourceId, boolean full, String triggerType) {
@@ -136,6 +143,40 @@ public class SyncService {
                 Mrs savedMr = saveOrUpdateMr(projectId, dto);
                 mrCount++;
 
+                // 拉取并保存 reviewer / approval 状态
+                try {
+                    List<String> reviewers = client.fetchReviewers(project.getProjectPath(), dto.getPlatformMrId());
+                    String approvalStatus = client.fetchApprovalStatus(project.getProjectPath(), dto.getPlatformMrId());
+
+                    // 如果 fetchReviewers 返回空但 MR DTO 中有 reviewers，使用 DTO 中的
+                    if ((reviewers == null || reviewers.isEmpty()) && dto.getReviewers() != null && !dto.getReviewers().isEmpty()) {
+                        reviewers = dto.getReviewers();
+                    }
+
+                    savedMr.setReviewers(reviewers != null && !reviewers.isEmpty()
+                            ? String.join(",", reviewers)
+                            : null);
+                    savedMr.setApprovalStatus(approvalStatus);
+
+                    // 重新计算 boardStatus（因为 approvalStatus 已更新）
+                    String ciStatus = savedMr.getCiStatus();
+                    if (ciStatus == null) ciStatus = "unknown";
+                    String newBoardStatus = boardStatusCalculator.calculate(
+                            savedMr.getPlatformStatus(),
+                            savedMr.getHasConflict(),
+                            ciStatus,
+                            savedMr.getMergeable(),
+                            savedMr.getTitle(),
+                            approvalStatus,
+                            reviewers
+                    );
+                    savedMr.setBoardStatus(newBoardStatus);
+                    mrsMapper.updateById(savedMr);
+                } catch (Exception e) {
+                    log.warn("Failed to fetch review data for MR {} in project {}: {}",
+                            dto.getPlatformMrId(), projectId, e.getMessage());
+                }
+
                 List<CiDTO> ciList = client.fetchCI(project.getProjectPath(), dto.getPlatformMrId());
                 for (CiDTO ci : ciList) {
                     saveOrUpdateCi(projectId, dto.getPlatformMrId(), ci);
@@ -227,7 +268,11 @@ public class SyncService {
         }
         entity.setCiStatus(ciStatus);
 
-        String boardStatus = boardStatusCalculator.calculate(dto.getPlatformStatus(), dto.getHasConflict(), ciStatus, dto.getMergeable(), dto.getTitle());
+        // 初始计算 boardStatus（不含 review 数据，后续会重新计算）
+        String boardStatus = boardStatusCalculator.calculate(
+                dto.getPlatformStatus(), dto.getHasConflict(), ciStatus,
+                dto.getMergeable(), dto.getTitle(), "pending", dto.getReviewers()
+        );
         entity.setBoardStatus(boardStatus);
 
         if (existing != null) {
