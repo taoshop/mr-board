@@ -301,6 +301,8 @@ public class SyncService {
 
         if (existing != null) {
             entity.setId(existing.getId());
+            entity.setReviewers(existing.getReviewers());
+            entity.setApprovalStatus(existing.getApprovalStatus());
             mrsMapper.updateById(entity);
             return entity;
         } else {
