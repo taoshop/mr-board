@@ -43,6 +43,16 @@
           <span class="column-title" :style="{ color: col.color }">{{ col.label }}</span>
           <el-tag size="small" type="info">{{ boardData[col.key]?.length || 0 }}</el-tag>
         </div>
+        <div class="column-stats" v-if="columnStats[col.key]?.length">
+          <span
+            v-for="s in columnStats[col.key]"
+            :key="s.label"
+            class="stat-item"
+            :style="{ color: s.color }"
+          >
+            {{ s.label }}: {{ s.value }}
+          </span>
+        </div>
         <div
           class="column-body"
           :title="dragOverState?.column === col.key && dragOverState.reason ? dragOverState.reason : ''"
@@ -210,8 +220,11 @@ interface Mr {
   commentsCount?: number
   changesCount?: number
   hasConflict?: boolean
+  mergeable?: boolean
   platformStatus?: string
   webUrl?: string
+  reviewers?: string
+  approvalStatus?: string
 }
 
 interface ProjectOption {
@@ -261,6 +274,83 @@ const isAdminOrTechlead = computed(() =>
 )
 const isDeveloper = computed(() => userRoles.value.includes('developer'))
 const isReviewer = computed(() => userRoles.value.includes('reviewer'))
+
+const columnStats = computed(() => {
+  const stats: Record<
+    string,
+    { label: string; value: number; color?: string }[]
+  > = {}
+  for (const col of columns.value) {
+    const list = boardData.value[col.key] || []
+    const items: { label: string; value: number; color?: string }[] = []
+
+    switch (col.key) {
+      case 'pending_review': {
+        const noReviewer = list.filter((m) => !m.reviewers).length
+        const ciRunning = list.filter(
+          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
+        ).length
+        if (noReviewer)
+          items.push({ label: '未指派', value: noReviewer, color: '#909399' })
+        if (ciRunning)
+          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
+        break
+      }
+      case 'reviewing': {
+        const approved = list.filter(
+          (m) => m.approvalStatus === 'approved'
+        ).length
+        const changesReq = list.filter(
+          (m) => m.approvalStatus === 'changes_requested'
+        ).length
+        const pending = list.filter(
+          (m) =>
+            !m.approvalStatus ||
+            m.approvalStatus === 'pending' ||
+            m.approvalStatus === 'reviewing'
+        ).length
+        const ciRunning = list.filter(
+          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
+        ).length
+        if (approved)
+          items.push({ label: '已通过', value: approved, color: '#67c23a' })
+        if (changesReq)
+          items.push({ label: '需修改', value: changesReq, color: '#f56c6c' })
+        if (pending)
+          items.push({ label: '待评审', value: pending, color: '#909399' })
+        if (ciRunning)
+          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
+        break
+      }
+      case 'conflict': {
+        const conflict = list.filter((m) => m.hasConflict).length
+        const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
+        const notMergeable = list.filter(
+          (m) =>
+            m.mergeable === false &&
+            !m.hasConflict &&
+            m.ciStatus !== 'failed'
+        ).length
+        if (conflict)
+          items.push({ label: '冲突', value: conflict, color: '#f56c6c' })
+        if (ciFailed)
+          items.push({ label: 'CI失败', value: ciFailed, color: '#f56c6c' })
+        if (notMergeable)
+          items.push({ label: '需变基', value: notMergeable, color: '#e6a23c' })
+        break
+      }
+      case 'ready':
+        items.push({ label: '可合并', value: list.length, color: '#67c23a' })
+        break
+      case 'merged':
+      case 'closed':
+        items.push({ label: '总计', value: list.length, color: col.color })
+        break
+    }
+    stats[col.key] = items
+  }
+  return stats
+})
 
 function canDrag(mr: Mr): boolean {
   if (isReviewer.value) return false
@@ -615,6 +705,19 @@ onUnmounted(() => {
         .column-title {
           font-weight: 600;
           font-size: 14px;
+        }
+      }
+
+      .column-stats {
+        padding: 6px 16px;
+        border-bottom: 1px solid #ebeef5;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+
+        .stat-item {
+          font-size: 11px;
+          font-weight: 500;
         }
       }
 

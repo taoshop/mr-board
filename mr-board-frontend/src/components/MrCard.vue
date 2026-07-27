@@ -32,6 +32,20 @@
         <span class="mr-id">#{{ data.platformMrId }}</span>
       </div>
       <div class="title" :title="data.title">{{ data.title }}</div>
+      <!-- Reviewer 状态行 -->
+      <div class="reviewer-line" v-if="reviewers.length">
+        <div class="reviewer-list">
+          <div v-for="r in reviewers" :key="r" class="reviewer-item" :title="r">
+            <el-avatar :size="20">{{ r.charAt(0).toUpperCase() }}</el-avatar>
+            <span class="reviewer-name">{{ r }}</span>
+          </div>
+        </div>
+        <span class="approval-badge" :class="'approval-' + (data.approvalStatus || 'pending')" :title="approvalLabel">
+          <el-icon v-if="data.approvalStatus === 'approved'"><CircleCheck /></el-icon>
+          <el-icon v-else-if="data.approvalStatus === 'changes_requested'"><CircleClose /></el-icon>
+          <el-icon v-else><Timer /></el-icon>
+        </span>
+      </div>
       <div class="conflict-reasons" v-if="status === 'conflict'">
         <el-tag v-if="data.hasConflict" size="small" type="danger" effect="dark">
           <el-icon><Warning /></el-icon> 代码冲突
@@ -81,7 +95,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Link, ArrowRight, ChatLineRound, Document, User, Loading, Minus, CircleClose, Warning, Lock } from '@element-plus/icons-vue'
+import { Link, ArrowRight, ChatLineRound, Document, User, Loading, Minus, CircleClose, Warning, Lock, CircleCheck, Timer } from '@element-plus/icons-vue'
 import CiStatusIcon from './CiStatusIcon.vue'
 import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
@@ -121,6 +135,16 @@ const reviewers = computed(() => {
   return props.data.reviewers.split(',').filter(Boolean)
 })
 
+const approvalLabel = computed(() => {
+  const map: Record<string, string> = {
+    approved: '已通过',
+    changes_requested: '需修改',
+    reviewing: '评审中',
+    pending: '待评审',
+  }
+  return map[props.data.approvalStatus || ''] || '待评审'
+})
+
 const ciTooltip = computed(() => {
   const map: Record<string, string> = {
     running: 'CI 运行中',
@@ -130,10 +154,48 @@ const ciTooltip = computed(() => {
   return map[props.data.ciStatus || ''] || ''
 })
 
-const showConflictTooltip = computed(() => {
+const approvalLabel = computed(() => {
+  const map: Record<string, string> = {
+    approved: '评审通过',
+    changes_requested: '需修改',
+    reviewing: '评审中',
+    pending: '待评审',
+  }
+  return map[props.data.approvalStatus || ''] || '待评审'
+})
+
+const approvalLabel = computed(() => {
+  const map: Record<string, string> = {
+    approved: '已通过',
+    changes_requested: '需修改',
+    reviewing: '评审中',
+    pending: '待评审',
+  }
+  return map[props.data.approvalStatus || ''] || '待评审'
+})
+
+const approvalLabel = computed(() => {
+  const map: Record<string, string> = {
+    approved: '已通过',
+    changes_requested: '需修改',
+    reviewing: '评审中',
+    pending: '待评审',
+  }
+  return map[props.data.approvalStatus || ''] || '待评审'
+})
   return status.value === 'conflict'
     && props.data.approvalStatus === 'approved'
     && props.data.mergeable === false
+})
+
+const approvalLabel = computed(() => {
+  const map: Record<string, string> = {
+    approved: '已批准',
+    changes_requested: '需修改',
+    reviewing: '评审中',
+    pending: '待评审',
+  }
+  return map[props.data.approvalStatus || ''] || '待评审'
 })
 
 // click / drag 冲突检测：mousedown 与 click 时鼠标位移超过阈值则认为是拖拽，不触发点击
@@ -247,6 +309,45 @@ function handleCardClick(e: MouseEvent) {
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     line-height: 1.4;
+  }
+
+  .reviewer-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+
+    .reviewer-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+
+      .reviewer-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        .el-avatar {
+          font-size: 10px;
+          background: #e4e7ed;
+          color: #606266;
+        }
+
+        .reviewer-name {
+          font-size: 11px;
+          color: #606266;
+        }
+      }
+    }
+
+    .approval-badge {
+      font-size: 14px;
+
+      &.approval-approved { color: #67c23a; }
+      &.approval-changes_requested { color: #f56c6c; }
+      &.approval-pending,
+      &.approval-reviewing { color: #909399; }
+    }
   }
 
   .conflict-reasons {
