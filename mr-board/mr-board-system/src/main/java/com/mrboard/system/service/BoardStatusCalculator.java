@@ -79,8 +79,11 @@ public class BoardStatusCalculator {
         boolean ciRunning = "running".equalsIgnoreCase(ciStatus) || "pending".equalsIgnoreCase(ciStatus);
         boolean ciFailed = "failed".equalsIgnoreCase(ciStatus);
 
-        if (ciRunning || ciFailed) {
+        if (ciRunning) {
             return "ci_checking";
+        }
+        if (ciFailed) {
+            return "conflict"; // CI 失败阻塞合并，归入冲突待解决
         }
 
         // 5. Review 状态

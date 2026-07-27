@@ -44,21 +44,28 @@
           @dragleave="handleDragLeave(col.key)"
           @drop="handleDrop(col.key, $event)"
         >
-          <RecycleScroller
+          <DynamicScroller
             class="scroller"
             :items="boardData[col.key] || []"
-            :item-size="160"
+            :min-item-size="160"
             key-field="id"
-            v-slot="{ item }"
           >
-            <MrCard
-              :data="item"
-              :readOnly="!canDrag(item)"
-              :draggable="canDrag(item)"
-              @dragstart="handleDragStart(item, $event)"
-              @view="openDetail"
-            />
-          </RecycleScroller>
+            <template v-slot="{ item, index, active }">
+              <DynamicScrollerItem
+                :item="item"
+                :active="active"
+                :data-index="index"
+              >
+                <MrCard
+                  :data="item"
+                  :readOnly="!canDrag(item)"
+                  :draggable="canDrag(item)"
+                  @dragstart="handleDragStart(item, $event)"
+                  @view="openDetail"
+                />
+              </DynamicScrollerItem>
+            </template>
+          </DynamicScroller>
           <el-empty v-if="!boardData[col.key]?.length" description="暂无数据" :image-size="60" />
         </div>
       </div>

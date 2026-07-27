@@ -47,7 +47,20 @@ public class SyncService {
     @Async("syncExecutor")
     @Transactional(rollbackFor = Exception.class)
     public void triggerSyncAsync(Long gitSourceId, boolean full, String triggerType) {
-        triggerSync(gitSourceId, full, triggerType);
+        LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Project::getGitSourceId, gitSourceId).eq(Project::getIsActive, 1);
+        List<Project> projects = projectMapper.selectList(wrapper);
+        for (Project project : projects) {
+            try {
+                if (full) {
+                    project.setLastSyncAt(null);
+                    projectMapper.updateById(project);
+                }
+                syncProject(project.getId(), triggerType);
+            } catch (Exception e) {
+                log.error("Trigger sync failed for project {}: {}", project.getId(), e.getMessage());
+            }
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)

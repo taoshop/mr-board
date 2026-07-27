@@ -237,13 +237,18 @@ public class GitHubClient implements GitSyncClient {
 
             boolean hasApproved = false;
             boolean hasChangesRequested = false;
+            boolean hasMeaningfulReview = false;
 
             for (Map<String, Object> review : reviews) {
                 String state = (String) review.get("state");
                 if ("APPROVED".equalsIgnoreCase(state)) {
                     hasApproved = true;
+                    hasMeaningfulReview = true;
                 } else if ("CHANGES_REQUESTED".equalsIgnoreCase(state)) {
                     hasChangesRequested = true;
+                    hasMeaningfulReview = true;
+                } else if (!"COMMENTED".equalsIgnoreCase(state)) {
+                    hasMeaningfulReview = true;
                 }
             }
 
@@ -253,7 +258,7 @@ public class GitHubClient implements GitSyncClient {
             if (hasChangesRequested) {
                 return "reviewing";
             }
-            return "reviewing"; // 有 review 记录但未 approved / changes_requested（如 COMMENTED）
+            return hasMeaningfulReview ? "reviewing" : "pending_review";
         } catch (Exception e) {
             log.warn("Failed to fetch approval status from GitHub: {}", e.getMessage());
             return "pending";
