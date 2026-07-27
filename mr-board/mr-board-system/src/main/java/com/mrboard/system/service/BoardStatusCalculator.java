@@ -79,14 +79,12 @@ public class BoardStatusCalculator {
         boolean ciRunning = "running".equalsIgnoreCase(ciStatus) || "pending".equalsIgnoreCase(ciStatus);
         boolean ciFailed = "failed".equalsIgnoreCase(ciStatus);
 
-        if (ciRunning) {
-            return "ci_checking";
-        }
+        // CI 失败直接阻塞合并
         if (ciFailed) {
-            return "conflict"; // CI 失败阻塞合并，归入冲突待解决
+            return "conflict";
         }
 
-        // 5. Review 状态
+        // 5. Review 状态（CI running/pending 时不单独成列，继续按 Review 状态判断）
         boolean hasReviewer = reviewers != null && !reviewers.isEmpty();
 
         if (!hasReviewer || "pending".equalsIgnoreCase(approvalStatus)) {

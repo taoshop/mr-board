@@ -15,7 +15,20 @@
       @click="handleCardClick"
     >
       <div class="card-header">
-        <el-tag size="small" :type="tagType" effect="light">{{ statusLabel }}</el-tag>
+        <div class="status-wrap">
+          <!-- CI 状态小圆点（头部标识） -->
+          <span
+            v-if="data.ciStatus === 'running' || data.ciStatus === 'pending' || data.ciStatus === 'failed'"
+            class="ci-dot"
+            :class="'ci-' + data.ciStatus"
+            :title="ciTooltip"
+          >
+            <el-icon v-if="data.ciStatus === 'running'" class="is-loading"><Loading /></el-icon>
+            <el-icon v-else-if="data.ciStatus === 'pending'"><Minus /></el-icon>
+            <el-icon v-else-if="data.ciStatus === 'failed'"><CircleClose /></el-icon>
+          </span>
+          <el-tag size="small" :type="tagType" effect="light">{{ statusLabel }}</el-tag>
+        </div>
         <span class="mr-id">#{{ data.platformMrId }}</span>
       </div>
       <div class="title" :title="data.title">{{ data.title }}</div>
@@ -57,7 +70,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Link, ArrowRight, ChatLineRound, Document, User } from '@element-plus/icons-vue'
+import { Link, ArrowRight, ChatLineRound, Document, User, Loading, Minus, CircleClose } from '@element-plus/icons-vue'
 import CiStatusIcon from './CiStatusIcon.vue'
 import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
@@ -95,6 +108,15 @@ const tagType = computed(() => getStatusTagType(status.value))
 const reviewers = computed(() => {
   if (!props.data.reviewers) return []
   return props.data.reviewers.split(',').filter(Boolean)
+})
+
+const ciTooltip = computed(() => {
+  const map: Record<string, string> = {
+    running: 'CI 运行中',
+    pending: 'CI 等待中',
+    failed: 'CI 失败',
+  }
+  return map[props.data.ciStatus || ''] || ''
 })
 
 const showConflictTooltip = computed(() => {
@@ -159,7 +181,6 @@ function handleCardClick(e: MouseEvent) {
 
   &.status-pending_review { border-left-color: #909399; }
   &.status-reviewing { border-left-color: #e6a23c; }
-  &.status-ci_checking { border-left-color: #409eff; }
   &.status-conflict { border-left-color: #f56c6c; }
   &.status-ready { border-left-color: #67c23a; }
   &.status-merged { border-left-color: #409eff; }
@@ -170,6 +191,33 @@ function handleCardClick(e: MouseEvent) {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 6px;
+
+    .status-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ci-dot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      font-size: 12px;
+
+      &.ci-running {
+        color: #e6a23c;
+      }
+
+      &.ci-pending {
+        color: #909399;
+      }
+
+      &.ci-failed {
+        color: #f56c6c;
+      }
+    }
 
     .mr-id {
       font-size: 12px;

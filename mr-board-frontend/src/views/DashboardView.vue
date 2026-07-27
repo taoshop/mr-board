@@ -7,7 +7,6 @@
       <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags @change="onFilterChange" style="width: 200px">
         <el-option label="待 Review" value="pending_review" />
         <el-option label="Review 中" value="reviewing" />
-        <el-option label="CI 检查中" value="ci_checking" />
         <el-option label="冲突待解决" value="conflict" />
         <el-option label="可合并" value="ready" />
         <el-option label="已合并" value="merged" />
@@ -21,7 +20,7 @@
 
     <!-- 骨架屏：初始加载时展示 -->
     <div v-if="initialLoading" class="skeleton-board">
-      <div v-for="i in 7" :key="i" class="skeleton-column">
+      <div v-for="i in 6" :key="i" class="skeleton-column">
         <el-skeleton :rows="3" animated />
       </div>
     </div>
