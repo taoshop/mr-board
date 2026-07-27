@@ -33,12 +33,12 @@
       </div>
       <div class="title" :title="data.title">{{ data.title }}</div>
       <!-- 伪就绪提示（ready 列但 CI 未通过） -->
-      <div class="pseudo-ready" v-if="pseudoReadyText">
+      <div v-if="pseudoReadyText" class="pseudo-ready">
         <el-icon><Warning /></el-icon>
         <span>{{ pseudoReadyText }}</span>
       </div>
       <!-- Reviewer 状态行 -->
-      <div class="reviewer-line" v-if="reviewers.length">
+      <div v-if="reviewers.length" class="reviewer-line">
         <div class="reviewer-list">
           <div v-for="r in reviewers" :key="r" class="reviewer-item" :title="r">
             <el-avatar :size="20">{{ r.charAt(0).toUpperCase() }}</el-avatar>
@@ -51,7 +51,7 @@
           <el-icon v-else><Timer /></el-icon>
         </span>
       </div>
-      <div class="conflict-reasons" v-if="status === 'conflict'">
+      <div v-if="status === 'conflict'" class="conflict-reasons">
         <el-tag v-if="data.hasConflict" size="small" type="danger" effect="dark">
           <el-icon><Warning /></el-icon> 代码冲突
         </el-tag>
@@ -79,7 +79,7 @@
         </div>
       </div>
       <!-- CI 摘要（running/pending/failed 时常驻显示） -->
-      <div class="ci-summary" v-if="ciSummaryText">
+      <div v-if="ciSummaryText" class="ci-summary">
         <el-icon v-if="data.ciStatus === 'running'" class="is-loading"><Loading /></el-icon>
         <el-icon v-else-if="data.ciStatus === 'pending'"><Minus /></el-icon>
         <el-icon v-else-if="data.ciStatus === 'failed'"><CircleClose /></el-icon>
@@ -94,11 +94,11 @@
             <el-icon><Document /></el-icon>{{ data.changesCount }}
           </span>
         </div>
-        <div class="ci" v-if="data.ciStatus">
+        <div v-if="data.ciStatus" class="ci">
           <CiStatusIcon :status="data.ciStatus" :size="14" />
         </div>
       </div>
-      <div class="actions" v-if="!readOnly">
+      <div v-if="!readOnly" class="actions">
         <el-button link size="small" @click.stop="$emit('view', data)">查看详情</el-button>
       </div>
     </el-card>

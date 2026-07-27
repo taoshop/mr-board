@@ -25,6 +25,7 @@
     "@typescript-eslint/parser": "^7.6.0",
     "@vitejs/plugin-vue": "^5.0.4",
     "eslint": "^8.57.0",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^9.24.1",
     "prettier": "^3.2.5",
     "rollup-plugin-visualizer": "^7.0.1",

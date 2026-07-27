@@ -17,7 +17,7 @@
         description="检测到您使用的是默认密码，请修改密码后再使用系统其他功能。"
       />
 
-      <el-form :model="form" label-width="100px" style="max-width: 500px" :rules="formRules" ref="formRef">
+      <el-form ref="formRef" :model="form" label-width="100px" style="max-width: 500px" :rules="formRules">
         <el-form-item label="用户名">
           <el-input v-model="form.username" disabled />
         </el-form-item>
@@ -37,7 +37,7 @@
           <el-input v-model="form.confirmPassword" type="password" placeholder="再次输入新密码" show-password />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSubmit" :loading="saving">保存修改</el-button>
+          <el-button type="primary" :loading="saving" @click="handleSubmit">保存修改</el-button>
         </el-form-item>
       </el-form>
     </el-card>

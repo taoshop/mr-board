@@ -1,10 +1,10 @@
 <template>
   <div class="board-page">
     <div class="filter-bar">
-      <el-select v-model="filters.projectId" placeholder="项目" clearable multiple collapse-tags @change="onFilterChange" style="width: 200px">
+      <el-select v-model="filters.projectId" placeholder="项目" clearable multiple collapse-tags style="width: 200px" @change="onFilterChange">
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags @change="onFilterChange" style="width: 200px">
+      <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags style="width: 200px" @change="onFilterChange">
         <el-option label="待 Review" value="pending_review" />
         <el-option label="Review 中" value="reviewing" />
         <el-option label="冲突待解决" value="conflict" />
@@ -12,8 +12,8 @@
         <el-option label="已合并" value="merged" />
         <el-option label="已关闭" value="closed" />
       </el-select>
-      <el-input v-model="filters.author" placeholder="作者" clearable @input="onFilterChange" style="width: 140px" />
-      <el-input v-model="filters.branch" placeholder="目标分支" clearable @input="onFilterChange" style="width: 160px" />
+      <el-input v-model="filters.author" placeholder="作者" clearable style="width: 140px" @input="onFilterChange" />
+      <el-input v-model="filters.branch" placeholder="目标分支" clearable style="width: 160px" @input="onFilterChange" />
       <el-button @click="resetFilters">重置</el-button>
       <el-button type="primary" :icon="Refresh" @click="fetchBoard">刷新</el-button>
     </div>
@@ -25,7 +25,7 @@
       </div>
     </div>
 
-    <div v-else class="kanban-board" v-loading="loading">
+    <div v-else v-loading="loading" class="kanban-board">
       <div
         v-for="col in columns"
         :key="col.key"
@@ -43,7 +43,7 @@
           <span class="column-title" :style="{ color: col.color }">{{ col.label }}</span>
           <el-tag size="small" type="info">{{ boardData[col.key]?.length || 0 }}</el-tag>
         </div>
-        <div class="column-stats" v-if="columnStats[col.key]?.length">
+        <div v-if="columnStats[col.key]?.length" class="column-stats">
           <span
             v-for="s in columnStats[col.key]"
             :key="s.label"
@@ -66,7 +66,7 @@
             :min-item-size="160"
             key-field="id"
           >
-            <template v-slot="{ item, index, active }">
+            <template #default="{ item, index, active }">
               <DynamicScrollerItem
                 :item="item"
                 :active="active"
@@ -74,7 +74,7 @@
               >
                 <MrCard
                   :data="item"
-                  :readOnly="!canDrag(item)"
+                  :read-only="!canDrag(item)"
                   :draggable="canDrag(item)"
                   @dragstart="handleDragStart(item, $event)"
                   @view="openDetail"

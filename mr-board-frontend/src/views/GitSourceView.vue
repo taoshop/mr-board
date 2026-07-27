@@ -8,7 +8,7 @@
         </div>
       </template>
 
-      <el-table :data="list" v-loading="loading" stripe>
+      <el-table v-loading="loading" :data="list" stripe>
         <el-table-column prop="name" label="名称" />
         <el-table-column label="平台">
           <template #default="{ row }">
