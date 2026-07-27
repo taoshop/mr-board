@@ -30,7 +30,13 @@
         v-for="col in columns"
         :key="col.key"
         class="kanban-column"
-        :class="{ 'drag-over': dragOverColumn === col.key }"
+        :class="[
+          dragOverState?.column === col.key
+            ? (dragOverState.allowed
+                ? (dragOverState.conditional ? 'drag-conditional' : 'drag-allowed')
+                : 'drag-forbidden')
+            : '',
+        ]"
         :style="{ borderTopColor: col.color }"
       >
         <div class="column-header">
@@ -39,6 +45,7 @@
         </div>
         <div
           class="column-body"
+          :title="dragOverState?.column === col.key && dragOverState.reason ? dragOverState.reason : ''"
           @dragover.prevent="handleDragOver(col.key)"
           @dragleave="handleDragLeave(col.key)"
           @drop="handleDrop(col.key, $event)"
@@ -239,7 +246,13 @@ const AUTO_REFRESH_INTERVAL = 60_000
 
 // 拖拽状态
 const draggingItem = ref<Mr | null>(null)
-const dragOverColumn = ref<string | null>(null)
+interface DragOverState {
+  column: string
+  allowed: boolean
+  conditional?: boolean
+  reason?: string
+}
+const dragOverState = ref<DragOverState | null>(null)
 
 const currentUser = computed(() => userStore.userInfo)
 const userRoles = computed(() => currentUser.value?.roles || [])
@@ -392,18 +405,31 @@ function handleDragStart(mr: Mr, event: DragEvent) {
 }
 
 function handleDragOver(columnKey: string) {
-  dragOverColumn.value = columnKey
+  const mr = draggingItem.value
+  if (!mr) return
+  if (dragOverState.value?.column === columnKey) return
+
+  const error = canDrop(mr, columnKey)
+  if (error) {
+    dragOverState.value = { column: columnKey, allowed: false, reason: error }
+  } else if (columnKey === 'ready') {
+    dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '需 CI 通过 + Review 通过 + 无冲突方可合并' }
+  } else if (columnKey === 'merged') {
+    dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '此操作将同步到 Git 平台，请二次确认' }
+  } else {
+    dragOverState.value = { column: columnKey, allowed: true }
+  }
 }
 
 function handleDragLeave(columnKey: string) {
-  if (dragOverColumn.value === columnKey) {
-    dragOverColumn.value = null
+  if (dragOverState.value?.column === columnKey) {
+    dragOverState.value = null
   }
 }
 
 async function handleDrop(targetStatus: string, event: DragEvent) {
   event.preventDefault()
-  dragOverColumn.value = null
+  dragOverState.value = null
   const mr = draggingItem.value
   draggingItem.value = null
   if (!mr) return
@@ -566,8 +592,17 @@ onUnmounted(() => {
         flex: 0 0 220px;
       }
 
-      &.drag-over {
-        box-shadow: 0 0 0 2px #409eff;
+      &.drag-allowed {
+        box-shadow: 0 0 0 2px #67c23a;
+      }
+
+      &.drag-conditional {
+        box-shadow: 0 0 0 2px #e6a23c;
+      }
+
+      &.drag-forbidden {
+        box-shadow: 0 0 0 2px #f56c6c;
+        opacity: 0.85;
       }
 
       .column-header {

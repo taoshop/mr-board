@@ -32,6 +32,17 @@
         <span class="mr-id">#{{ data.platformMrId }}</span>
       </div>
       <div class="title" :title="data.title">{{ data.title }}</div>
+      <div class="conflict-reasons" v-if="status === 'conflict'">
+        <el-tag v-if="data.hasConflict" size="small" type="danger" effect="dark">
+          <el-icon><Warning /></el-icon> 代码冲突
+        </el-tag>
+        <el-tag v-else-if="data.ciStatus === 'failed'" size="small" type="danger" effect="dark">
+          <el-icon><CircleClose /></el-icon> CI 失败
+        </el-tag>
+        <el-tag v-else-if="data.mergeable === false" size="small" type="warning" effect="dark">
+          <el-icon><Lock /></el-icon> 需变基/保护规则
+        </el-tag>
+      </div>
       <div class="meta">
         <div class="author">
           <el-avatar :size="18" :src="data.authorAvatar" />
@@ -70,7 +81,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Link, ArrowRight, ChatLineRound, Document, User, Loading, Minus, CircleClose } from '@element-plus/icons-vue'
+import { Link, ArrowRight, ChatLineRound, Document, User, Loading, Minus, CircleClose, Warning, Lock } from '@element-plus/icons-vue'
 import CiStatusIcon from './CiStatusIcon.vue'
 import { getStatusLabel, getStatusTagType } from '@/constants/boardStatus'
 
@@ -236,6 +247,22 @@ function handleCardClick(e: MouseEvent) {
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     line-height: 1.4;
+  }
+
+  .conflict-reasons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: #fdf2f2;
+    border-radius: 4px;
+
+    .el-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
   }
 
   .meta {
