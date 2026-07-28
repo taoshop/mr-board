@@ -13,6 +13,7 @@
         <el-option label="已关闭" value="closed" />
       </el-select>
       <el-input v-model="filters.author" placeholder="作者" clearable style="width: 140px" @input="onFilterChange" />
+      <el-input v-model="filters.reviewer" placeholder="Reviewer" clearable style="width: 140px" @input="onFilterChange" />
       <el-input v-model="filters.branch" placeholder="目标分支" clearable style="width: 160px" @input="onFilterChange" />
       <el-button @click="resetFilters">重置</el-button>
       <el-button type="primary" :icon="Refresh" @click="fetchBoard">刷新</el-button>
@@ -265,6 +266,7 @@ const filters = reactive({
   projectId: [] as number[],
   status: [] as string[],
   author: '',
+  reviewer: '',
   branch: '',
 })
 
@@ -378,7 +380,7 @@ const scrollerVersion = ref(0)
 
 /** 筛选变化时刷新 DynamicScroller 的 key */
 const scrollerKey = computed(() =>
-  `board-${filters.author}-${filters.branch}-${filters.projectId.join(',')}-${filters.status.join(',')}-${scrollerVersion.value}`
+  `board-${filters.author}-${filters.reviewer}-${filters.branch}-${filters.projectId.join(',')}-${filters.status.join(',')}-${scrollerVersion.value}`
 )
 
 function canDrag(mr: Mr): boolean {
@@ -456,6 +458,7 @@ async function fetchBoard() {
     if (filters.projectId.length) params.projectId = filters.projectId.join(',')
     if (filters.status.length) params.status = filters.status.join(',')
     if (filters.author) params.author = filters.author
+    if (filters.reviewer) params.reviewer = filters.reviewer
     if (filters.branch) params.branch = filters.branch
     const res = await getBoard(params)
     if (res.code === 200) {
@@ -484,6 +487,7 @@ function resetFilters() {
   filters.projectId = []
   filters.status = []
   filters.author = ''
+  filters.reviewer = ''
   filters.branch = ''
   fetchBoard()
 }
