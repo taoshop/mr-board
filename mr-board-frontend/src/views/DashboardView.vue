@@ -861,12 +861,18 @@ onMounted(() => {
   fetchProjects()
   fetchBoard()
   startAutoRefresh()
+  window.addEventListener('sync-completed', handleSyncCompleted)
 })
 
 onUnmounted(() => {
   stopAutoRefresh()
   if (debounceTimer) clearTimeout(debounceTimer)
+  window.removeEventListener('sync-completed', handleSyncCompleted)
 })
+
+function handleSyncCompleted() {
+  fetchBoard()
+}
 </script>
 
 <style scoped lang="scss">

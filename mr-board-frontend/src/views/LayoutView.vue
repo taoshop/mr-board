@@ -103,6 +103,7 @@ function connectWebSocket() {
           type: 'success',
           duration: 5000,
         })
+        window.dispatchEvent(new CustomEvent('sync-completed', { detail: data }))
       } else if (data.type === 'sync_failed') {
         ElNotification({
           title: '同步失败',
