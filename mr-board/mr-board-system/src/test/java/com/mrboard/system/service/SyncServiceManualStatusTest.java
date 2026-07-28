@@ -32,7 +32,7 @@ class SyncServiceManualStatusTest {
     @BeforeEach
     void setUp() {
         // 用 null Mapper 初始化（saveOrUpdateMr 只读 DB，但测试中不真正调用 Mapper 方法）
-        syncService = new SyncService(null, null, null, null, null, null, null, null, null);
+        syncService = new SyncService(null, null, null, null, null, null, null, null, null, null);
     }
 
     // ==========  saveOrUpdateMr 行为验证（通过 doSync 中的逻辑片段） ==========

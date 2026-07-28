@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class SyncServiceCiStatusTest {
 
-    private final SyncService syncService = new SyncService(null, null, null, null, null, null, null, null, null);
+    private final SyncService syncService = new SyncService(null, null, null, null, null, null, null, null, null, null);
 
     /**
      * 通过反射调用 SyncService.calculateOverallCiStatus(List<CiDTO>)
