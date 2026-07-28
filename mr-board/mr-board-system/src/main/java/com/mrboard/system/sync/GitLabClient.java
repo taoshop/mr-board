@@ -8,12 +8,12 @@ import com.mrboard.system.sync.dto.MrDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.net.InetSocketAddress;
-import java.net.Proxy;
+import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.core5.http.HttpHost;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -33,14 +33,15 @@ public class GitLabClient implements GitSyncClient {
         this.apiBaseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.substring(0, apiBaseUrl.length() - 1) : apiBaseUrl;
         this.accessToken = accessToken;
 
+        HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
         if (proxyHost != null && proxyPort != null) {
-            SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-            factory.setProxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort)));
-            this.restTemplate = new RestTemplate(factory);
+            httpClientBuilder.setProxy(new HttpHost("http", proxyHost, proxyPort));
             log.info("GitLabClient using proxy {}:{}", proxyHost, proxyPort);
-        } else {
-            this.restTemplate = new RestTemplate();
         }
+        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory(
+                httpClientBuilder.build()
+        );
+        this.restTemplate = new RestTemplate(factory);
     }
 
     @Override
@@ -126,6 +127,7 @@ public class GitLabClient implements GitSyncClient {
                         dto.setStage((String) job.get("stage"));
                         dto.setStatus(mapCiStatus((String) job.get("status")));
                         dto.setLogUrl((String) job.get("web_url"));
+                        dto.setStartedAt(parseDateTime((String) job.get("started_at")));
                         result.add(dto);
                     }
                 }
