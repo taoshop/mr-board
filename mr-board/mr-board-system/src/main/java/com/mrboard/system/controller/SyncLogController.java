@@ -30,7 +30,7 @@ public class SyncLogController {
 
     @Operation(summary = "同步日志分页列表", description = "支持按 Git源、项目、状态、时间范围筛选")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER','REVIEWER')")
     public Result<Page<SyncLog>> list(
             @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size,

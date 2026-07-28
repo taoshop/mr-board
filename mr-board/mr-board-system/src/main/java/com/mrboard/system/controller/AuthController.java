@@ -69,7 +69,7 @@ public class AuthController {
             List<Permission> permissions = userMapper.selectPermissionsByUserId(user.getId());
 
             Map<String, Object> claims = new HashMap<>();
-            claims.put("roles", roles.stream().map(Role::getCode).collect(Collectors.toList()));
+            claims.put("roles", normalizeRoleCodes(roles));
             claims.put("permissions", permissions.stream().map(Permission::getCode).collect(Collectors.toList()));
 
             String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), claims);
@@ -80,7 +80,7 @@ public class AuthController {
                     .username(user.getUsername())
                     .displayName(user.getDisplayName())
                     .avatar(user.getAvatar())
-                    .roles(roles.stream().map(Role::getCode).collect(Collectors.toList()))
+                    .roles(normalizeRoleCodes(roles))
                     .build();
 
             return Result.success(LoginResponse.builder()
@@ -115,7 +115,7 @@ public class AuthController {
         List<Permission> permissions = userMapper.selectPermissionsByUserId(userId);
 
         Map<String, Object> newClaims = new HashMap<>();
-        newClaims.put("roles", roles.stream().map(Role::getCode).collect(Collectors.toList()));
+        newClaims.put("roles", normalizeRoleCodes(roles));
         newClaims.put("permissions", permissions.stream().map(Permission::getCode).collect(Collectors.toList()));
 
         String newAccessToken = jwtUtil.generateAccessToken(userId, user.getUsername(), newClaims);
@@ -125,7 +125,7 @@ public class AuthController {
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .avatar(user.getAvatar())
-                .roles(roles.stream().map(Role::getCode).collect(Collectors.toList()))
+                .roles(normalizeRoleCodes(roles))
                 .build();
 
         return Result.success(LoginResponse.builder()
@@ -151,7 +151,7 @@ public class AuthController {
                 .username(user.getUsername())
                 .displayName(user.getDisplayName())
                 .avatar(user.getAvatar())
-                .roles(roles.stream().map(Role::getCode).collect(Collectors.toList()))
+                .roles(normalizeRoleCodes(roles))
                 .build();
 
         return Result.success(userInfo);
@@ -210,9 +210,18 @@ public class AuthController {
         List<Permission> permissions = userMapper.selectPermissionsByUserId(userId);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("roles", roles.stream().map(Role::getCode).collect(Collectors.toList()));
+        result.put("roles", normalizeRoleCodes(roles));
         result.put("permissions", permissions.stream().map(Permission::getCode).collect(Collectors.toList()));
         return Result.success(result);
+    }
+
+    private List<String> normalizeRoleCodes(List<Role> roles) {
+        return roles.stream().map(Role::getCode).map(code -> {
+            if ("dev".equals(code)) {
+                return "developer";
+            }
+            return code;
+        }).collect(Collectors.toList());
     }
 
     private void incrementFailCount(String key) {

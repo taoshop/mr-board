@@ -33,7 +33,13 @@ public class CustomUserDetailsService implements UserDetailsService {
         List<Permission> permissions = userMapper.selectPermissionsByUserId(userId);
 
         List<SimpleGrantedAuthority> authorities = Stream.concat(
-                roles.stream().map(r -> new SimpleGrantedAuthority("ROLE_" + r.getCode().toUpperCase())),
+                roles.stream().map(r -> {
+                    String code = r.getCode().toUpperCase();
+                    if ("DEV".equals(code)) {
+                        code = "DEVELOPER";
+                    }
+                    return new SimpleGrantedAuthority("ROLE_" + code);
+                }),
                 permissions.stream().map(p -> new SimpleGrantedAuthority(p.getCode()))
         ).collect(Collectors.toList());
 

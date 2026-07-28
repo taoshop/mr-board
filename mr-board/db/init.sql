@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 
 -- Roles
 INSERT INTO roles (code, name, description) VALUES
-('dev', 'Developer', '开发人员'),
+('developer', 'Developer', '开发人员'),
 ('reviewer', 'Reviewer', '代码评审员'),
 ('techlead', 'Tech Lead', '技术负责人'),
 ('pm', 'PM', '项目经理'),

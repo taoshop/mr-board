@@ -59,14 +59,15 @@ public class BoardController {
         return Result.success(columns);
     }
 
-    @Operation(summary = "看板数据", description = "按7列分组返回MR列表，支持项目、状态、作者、分支筛选；status支持逗号分隔多选")
+    @Operation(summary = "看板数据", description = "按7列分组返回MR列表，支持项目、状态、作者、Reviewer、分支筛选；status支持逗号分隔多选")
     @GetMapping
-    @Cacheable(value = "board", key = "'project:' + (#projectId != null ? #projectId : 'all') + ':status:' + (#status != null ? #status : 'all') + ':author:' + (#author != null ? #author : 'all') + ':branch:' + (#branch != null ? #branch : 'all')")
+    @Cacheable(value = "board", key = "'project:' + (#projectId != null ? #projectId : 'all') + ':status:' + (#status != null ? #status : 'all') + ':author:' + (#author != null ? #author : 'all') + ':reviewer:' + (#reviewer != null ? #reviewer : 'all') + ':branch:' + (#branch != null ? #branch : 'all')")
     @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER','REVIEWER')")
     public Result<Map<String, List<Mrs>>> getBoard(
             @Parameter(description = "项目ID") @RequestParam(required = false) Long projectId,
             @Parameter(description = "看板状态，支持逗号分隔多选") @RequestParam(required = false) String status,
             @Parameter(description = "作者用户名") @RequestParam(required = false) String author,
+            @Parameter(description = "Reviewer用户名") @RequestParam(required = false) String reviewer,
             @Parameter(description = "目标分支") @RequestParam(required = false) String branch
     ) {
         LambdaQueryWrapper<Mrs> wrapper = new LambdaQueryWrapper<>();
@@ -86,6 +87,9 @@ public class BoardController {
         }
         if (StringUtils.isNotBlank(author) && !"all".equalsIgnoreCase(author)) {
             wrapper.eq(Mrs::getAuthorName, author);
+        }
+        if (StringUtils.isNotBlank(reviewer) && !"all".equalsIgnoreCase(reviewer)) {
+            wrapper.like(Mrs::getReviewers, reviewer);
         }
         if (StringUtils.isNotBlank(branch) && !"all".equalsIgnoreCase(branch)) {
             wrapper.eq(Mrs::getTargetBranch, branch);
