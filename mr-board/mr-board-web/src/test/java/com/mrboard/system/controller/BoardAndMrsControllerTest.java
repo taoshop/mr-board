@@ -80,11 +80,11 @@ class BoardAndMrsControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    void getColumns_shouldReturn7Columns() throws Exception {
+    void getColumns_shouldReturn6Columns() throws Exception {
         mockMvc.perform(get("/api/board/columns").with(bearerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data.length()").value(7))
+                .andExpect(jsonPath("$.data.length()").value(6))
                 .andExpect(jsonPath("$.data[0].key").value("pending_review"));
     }
 

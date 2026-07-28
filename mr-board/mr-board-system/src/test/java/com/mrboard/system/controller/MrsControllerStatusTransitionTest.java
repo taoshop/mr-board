@@ -101,7 +101,7 @@ class MrsControllerStatusTransitionTest {
 
         assertNull(callValidate(mr, "reviewing", admin));
         assertNull(callValidate(mr, "ready", admin));
-        assertNull(callValidate(mr, "ci_checking", admin));
+        assertNull(callValidate(mr, "conflict", admin));
         assertNull(callValidate(mr, "merged", admin));
         assertNull(callValidate(mr, "closed", admin));
     }

@@ -148,7 +148,7 @@ class ManualStatusE2ETest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("场景5：连续拖拽 changing_status → reviewing → ci_checking → reviewing → manual_status 最后值")
+    @DisplayName("场景5：连续拖拽 changing_status → reviewing → conflict → reviewing → manual_status 最后值")
     void consecutiveDrags_shouldKeepLatestManualStatus() throws Exception {
         // 第一次拖拽到 reviewing
         mockMvc.perform(put("/api/mrs/{id}/status", mrId)
@@ -156,11 +156,11 @@ class ManualStatusE2ETest extends BaseIntegrationTest {
                 .contentType("application/json")
                 .content("{\"boardStatus\":\"reviewing\"}"));
 
-        // 第二次拖拽到 ci_checking
+        // 第二次拖拽到 conflict
         mockMvc.perform(put("/api/mrs/{id}/status", mrId)
                 .with(bearerToken())
                 .contentType("application/json")
-                .content("{\"boardStatus\":\"ci_checking\"}"));
+                .content("{\"boardStatus\":\"conflict\"}"));
 
         // 第三次拖拽回 reviewing
         mockMvc.perform(put("/api/mrs/{id}/status", mrId)

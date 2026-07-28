@@ -7,7 +7,6 @@
       <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags style="width: 200px" @change="onFilterChange">
         <el-option label="待 Review" value="pending_review" />
         <el-option label="Review 中" value="reviewing" />
-        <el-option label="CI 检查中" value="ci_checking" />
         <el-option label="冲突待解决" value="conflict" />
         <el-option label="可合并" value="ready" />
         <el-option label="已合并" value="merged" />
@@ -41,8 +40,18 @@
         :style="{ borderTopColor: col.color }"
       >
         <div class="column-header">
-          <span class="column-title" :style="{ color: col.color }">{{ col.label }}</span>
-          <el-tag size="small" type="info">{{ boardData[col.key]?.length || 0 }}</el-tag>
+          <div class="column-title-wrap">
+            <el-icon class="column-icon" :style="{ color: col.color }">
+              <Clock v-if="col.key === 'pending_review'" />
+              <UserFilled v-else-if="col.key === 'reviewing'" />
+              <WarningFilled v-else-if="col.key === 'conflict'" />
+              <CircleCheckFilled v-else-if="col.key === 'ready'" />
+              <Select v-else-if="col.key === 'merged'" />
+              <CircleClose v-else-if="col.key === 'closed'" />
+            </el-icon>
+            <span class="column-title" :style="{ color: col.color }">{{ col.label }}</span>
+          </div>
+          <el-tag size="small" type="info" effect="plain" round>{{ boardData[col.key]?.length || 0 }}</el-tag>
         </div>
         <div v-if="columnStats[col.key]?.length" class="column-stats">
           <span
@@ -206,7 +215,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, onUnmounted, computed } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Clock, UserFilled, WarningFilled, CircleCheckFilled, Select, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges, getMrComments, rerunMrCi, assignMrReviewer, remindMrReviewers, reopenMr } from '@/api/board'
 import type { CiJob, StatusHistory, ChangeItem, CommentItem } from '@/api/board'
@@ -298,6 +307,12 @@ const columnStats = computed(() => {
     const list = boardData.value[col.key] || []
     const items: { label: string; value: number; color?: string }[] = []
 
+    // 所有非终态列显示 CI 运行中数量
+    const ciRunning = list.filter(
+      (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
+    ).length
+    const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
+
     switch (col.key) {
       case 'pending_review': {
         const noReviewer = list.filter((m) => !m.reviewers).length
@@ -326,15 +341,6 @@ const columnStats = computed(() => {
           items.push({ label: '待评审', value: pending, color: '#909399' })
         break
       }
-      case 'ci_checking': {
-        const ciRunning = list.filter((m) => m.ciStatus === 'running' || m.ciStatus === 'pending').length
-        const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
-        if (ciRunning)
-          items.push({ label: '运行中', value: ciRunning, color: '#e6a23c' })
-        if (ciFailed)
-          items.push({ label: 'CI失败', value: ciFailed, color: '#f56c6c' })
-        break
-      }
       case 'conflict': {
         const conflict = list.filter((m) => m.hasConflict).length
         const notMergeable = list.filter(
@@ -344,6 +350,8 @@ const columnStats = computed(() => {
         ).length
         if (conflict)
           items.push({ label: '冲突', value: conflict, color: '#f56c6c' })
+        if (ciFailed)
+          items.push({ label: 'CI失败', value: ciFailed, color: '#f56c6c' })
         if (notMergeable)
           items.push({ label: '需变基', value: notMergeable, color: '#e6a23c' })
         break
@@ -355,6 +363,10 @@ const columnStats = computed(() => {
       case 'closed':
         items.push({ label: '总计', value: list.length, color: col.color })
         break
+    }
+    // CI 运行中提示（仅非终态列）
+    if (ciRunning && col.key !== 'merged' && col.key !== 'closed') {
+      items.push({ label: '⏳CI', value: ciRunning, color: '#e6a23c' })
     }
     stats[col.key] = items
   }
@@ -370,6 +382,8 @@ const scrollerKey = computed(() =>
 )
 
 function canDrag(mr: Mr): boolean {
+  // 终态列不可拖拽
+  if (mr.boardStatus === 'merged' || mr.boardStatus === 'closed') return false
   if (isReviewer.value) return false
   if (isAdminOrTechlead.value) return true
   if (isDeveloper.value) {
@@ -525,6 +539,10 @@ function handleDragOver(columnKey: string) {
     dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '需 CI 通过 + Review 通过 + 无冲突方可合并' }
   } else if (columnKey === 'merged') {
     dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '此操作将同步到 Git 平台，请二次确认' }
+  } else if (columnKey === 'closed') {
+    dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '将关闭此 MR' }
+  } else if (mr.hasConflict && columnKey === 'conflict') {
+    dragOverState.value = { column: columnKey, allowed: true, reason: '放回冲突列' }
   } else {
     dragOverState.value = { column: columnKey, allowed: true }
   }
@@ -902,15 +920,18 @@ onUnmounted(() => {
 
       &.drag-allowed {
         box-shadow: 0 0 0 2px #67c23a;
+        .column-body { cursor: grab; }
       }
 
       &.drag-conditional {
         box-shadow: 0 0 0 2px #e6a23c;
+        .column-body { cursor: pointer; }
       }
 
       &.drag-forbidden {
         box-shadow: 0 0 0 2px #f56c6c;
         opacity: 0.85;
+        .column-body { cursor: not-allowed; }
       }
 
       .column-header {
@@ -919,6 +940,16 @@ onUnmounted(() => {
         display: flex;
         justify-content: space-between;
         align-items: center;
+
+        .column-title-wrap {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .column-icon {
+          font-size: 16px;
+        }
 
         .column-title {
           font-weight: 600;
