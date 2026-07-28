@@ -7,6 +7,7 @@ import com.mrboard.system.dto.UserCreateRequest;
 import com.mrboard.system.entity.Role;
 import com.mrboard.system.entity.User;
 import com.mrboard.system.entity.UserRole;
+import com.mrboard.system.mapper.RoleMapper;
 import com.mrboard.system.mapper.UserMapper;
 import com.mrboard.system.mapper.UserRoleMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,7 @@ public class UserController {
 
     private final UserMapper userMapper;
     private final UserRoleMapper userRoleMapper;
+    private final RoleMapper roleMapper;
     private final PasswordEncoder passwordEncoder;
 
     @Operation(summary = "用户分页列表")
@@ -98,6 +100,13 @@ public class UserController {
         return Result.success();
     }
 
+    @Operation(summary = "角色列表")
+    @GetMapping("/roles")
+    public Result<List<Role>> listRoles() {
+        List<Role> roles = roleMapper.selectList(null);
+        return Result.success(roles);
+    }
+
     @Operation(summary = "更新用户")
     @PutMapping("/{id}")
     @Transactional
@@ -116,6 +125,19 @@ public class UserController {
             user.setPasswordChanged(false);
         }
         userMapper.updateById(user);
+
+        // 更新角色关联
+        if (request.getRoleIds() != null) {
+            userRoleMapper.delete(
+                    new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, id)
+            );
+            for (Long roleId : request.getRoleIds()) {
+                UserRole ur = new UserRole();
+                ur.setUserId(id);
+                ur.setRoleId(roleId);
+                userRoleMapper.insert(ur);
+            }
+        }
 
         return Result.success();
     }
