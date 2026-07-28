@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mrboard.common.result.Result;
 import com.mrboard.system.dto.UserCreateRequest;
+import com.mrboard.system.dto.UserUpdateRequest;
 import com.mrboard.system.entity.Role;
 import com.mrboard.system.entity.User;
 import com.mrboard.system.entity.UserRole;
@@ -101,7 +102,7 @@ public class UserController {
     }
 
     @Operation(summary = "角色列表")
-    @GetMapping("/roles")
+    @GetMapping("/roles/list")
     public Result<List<Role>> listRoles() {
         List<Role> roles = roleMapper.selectList(null);
         return Result.success(roles);
@@ -110,7 +111,7 @@ public class UserController {
     @Operation(summary = "更新用户")
     @PutMapping("/{id}")
     @Transactional
-    public Result<Void> update(@Parameter(description = "用户ID") @PathVariable Long id, @Valid @RequestBody UserCreateRequest request) {
+    public Result<Void> update(@Parameter(description = "用户ID") @PathVariable Long id, @Valid @RequestBody UserUpdateRequest request) {
         User user = userMapper.selectById(id);
         if (user == null) {
             return Result.error(1001, "用户不存在");

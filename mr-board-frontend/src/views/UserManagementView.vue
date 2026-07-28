@@ -158,7 +158,7 @@ function handleEdit(row: any) {
 
 async function fetchRoles() {
   try {
-    const res: any = await request.get('/admin/users/roles')
+    const res: any = await request.get('/admin/users/roles/list')
     allRoles.value = res.data || []
   } catch {
     // ignore
