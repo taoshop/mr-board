@@ -41,7 +41,7 @@ public class BoardController {
     private final UserMapper userMapper;
 
     private static final List<String> COLUMNS = Arrays.asList(
-            "pending_review", "reviewing", "ci_checking", "conflict", "ready", "merged", "closed"
+            "pending_review", "reviewing", "conflict", "ready", "merged", "closed"
     );
 
     @Operation(summary = "看板列定义")
@@ -132,7 +132,6 @@ public class BoardController {
         return switch (key) {
             case "pending_review" -> "待 Review";
             case "reviewing" -> "Review 中";
-            case "ci_checking" -> "CI 检查中";
             case "conflict" -> "冲突待解决";
             case "ready" -> "可合并";
             case "merged" -> "已合并";
@@ -145,7 +144,6 @@ public class BoardController {
         return switch (key) {
             case "pending_review" -> "#909399";
             case "reviewing" -> "#e6a23c";
-            case "ci_checking" -> "#409eff";
             case "conflict" -> "#f56c6c";
             case "ready" -> "#67c23a";
             case "merged" -> "#409eff";

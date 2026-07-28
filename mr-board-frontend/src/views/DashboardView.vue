@@ -40,8 +40,18 @@
         :style="{ borderTopColor: col.color }"
       >
         <div class="column-header">
-          <span class="column-title" :style="{ color: col.color }">{{ col.label }}</span>
-          <el-tag size="small" type="info">{{ boardData[col.key]?.length || 0 }}</el-tag>
+          <div class="column-title-wrap">
+            <el-icon class="column-icon" :style="{ color: col.color }">
+              <Clock v-if="col.key === 'pending_review'" />
+              <UserFilled v-else-if="col.key === 'reviewing'" />
+              <WarningFilled v-else-if="col.key === 'conflict'" />
+              <CircleCheckFilled v-else-if="col.key === 'ready'" />
+              <Select v-else-if="col.key === 'merged'" />
+              <CircleClose v-else-if="col.key === 'closed'" />
+            </el-icon>
+            <span class="column-title" :style="{ color: col.color }">{{ col.label }}</span>
+          </div>
+          <el-tag size="small" type="info" effect="plain" round>{{ boardData[col.key]?.length || 0 }}</el-tag>
         </div>
         <div v-if="columnStats[col.key]?.length" class="column-stats">
           <span
@@ -65,6 +75,7 @@
             :items="boardData[col.key] || []"
             :min-item-size="160"
             key-field="id"
+            :key="scrollerKey"
           >
             <template #default="{ item, index, active }">
               <DynamicScrollerItem
@@ -204,7 +215,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, onUnmounted, computed } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Clock, UserFilled, WarningFilled, CircleCheckFilled, Select, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { getColumns, getBoard, getProjects, updateMrStatus, getMrDetail, getMrChanges, getMrComments, rerunMrCi, assignMrReviewer, remindMrReviewers, reopenMr } from '@/api/board'
 import type { CiJob, StatusHistory, ChangeItem, CommentItem } from '@/api/board'
@@ -296,16 +307,17 @@ const columnStats = computed(() => {
     const list = boardData.value[col.key] || []
     const items: { label: string; value: number; color?: string }[] = []
 
+    // 所有非终态列显示 CI 运行中数量
+    const ciRunning = list.filter(
+      (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
+    ).length
+    const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
+
     switch (col.key) {
       case 'pending_review': {
         const noReviewer = list.filter((m) => !m.reviewers).length
-        const ciRunning = list.filter(
-          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
-        ).length
         if (noReviewer)
           items.push({ label: '未指派', value: noReviewer, color: '#909399' })
-        if (ciRunning)
-          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
         break
       }
       case 'reviewing': {
@@ -321,27 +333,20 @@ const columnStats = computed(() => {
             m.approvalStatus === 'pending' ||
             m.approvalStatus === 'reviewing'
         ).length
-        const ciRunning = list.filter(
-          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
-        ).length
         if (approved)
           items.push({ label: '已通过', value: approved, color: '#67c23a' })
         if (changesReq)
           items.push({ label: '需修改', value: changesReq, color: '#f56c6c' })
         if (pending)
           items.push({ label: '待评审', value: pending, color: '#909399' })
-        if (ciRunning)
-          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
         break
       }
       case 'conflict': {
         const conflict = list.filter((m) => m.hasConflict).length
-        const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
         const notMergeable = list.filter(
           (m) =>
             m.mergeable === false &&
-            !m.hasConflict &&
-            m.ciStatus !== 'failed'
+            !m.hasConflict
         ).length
         if (conflict)
           items.push({ label: '冲突', value: conflict, color: '#f56c6c' })
@@ -359,12 +364,26 @@ const columnStats = computed(() => {
         items.push({ label: '总计', value: list.length, color: col.color })
         break
     }
+    // CI 运行中提示（仅非终态列）
+    if (ciRunning && col.key !== 'merged' && col.key !== 'closed') {
+      items.push({ label: '⏳CI', value: ciRunning, color: '#e6a23c' })
+    }
     stats[col.key] = items
   }
   return stats
 })
 
+/** 筛选变化时刷新 DynamicScroller 的 key，递增确保强制重新渲染 */
+const scrollerVersion = ref(0)
+
+/** 筛选变化时刷新 DynamicScroller 的 key */
+const scrollerKey = computed(() =>
+  `board-${filters.author}-${filters.branch}-${filters.projectId.join(',')}-${filters.status.join(',')}-${scrollerVersion.value}`
+)
+
 function canDrag(mr: Mr): boolean {
+  // 终态列不可拖拽
+  if (mr.boardStatus === 'merged' || mr.boardStatus === 'closed') return false
   if (isReviewer.value) return false
   if (isAdminOrTechlead.value) return true
   if (isDeveloper.value) {
@@ -443,6 +462,8 @@ async function fetchBoard() {
       const newData = res.data
       checkStatusChange(newData)
       boardData.value = newData
+      // 递增版本号，强制 DynamicScroller 重新渲染
+      scrollerVersion.value++
     }
   } catch (e) {
     ElMessage.error('获取看板数据失败')
@@ -518,6 +539,10 @@ function handleDragOver(columnKey: string) {
     dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '需 CI 通过 + Review 通过 + 无冲突方可合并' }
   } else if (columnKey === 'merged') {
     dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '此操作将同步到 Git 平台，请二次确认' }
+  } else if (columnKey === 'closed') {
+    dragOverState.value = { column: columnKey, allowed: true, conditional: true, reason: '将关闭此 MR' }
+  } else if (mr.hasConflict && columnKey === 'conflict') {
+    dragOverState.value = { column: columnKey, allowed: true, reason: '放回冲突列' }
   } else {
     dragOverState.value = { column: columnKey, allowed: true }
   }
@@ -895,15 +920,18 @@ onUnmounted(() => {
 
       &.drag-allowed {
         box-shadow: 0 0 0 2px #67c23a;
+        .column-body { cursor: grab; }
       }
 
       &.drag-conditional {
         box-shadow: 0 0 0 2px #e6a23c;
+        .column-body { cursor: pointer; }
       }
 
       &.drag-forbidden {
         box-shadow: 0 0 0 2px #f56c6c;
         opacity: 0.85;
+        .column-body { cursor: not-allowed; }
       }
 
       .column-header {
@@ -912,6 +940,16 @@ onUnmounted(() => {
         display: flex;
         justify-content: space-between;
         align-items: center;
+
+        .column-title-wrap {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .column-icon {
+          font-size: 16px;
+        }
 
         .column-title {
           font-weight: 600;

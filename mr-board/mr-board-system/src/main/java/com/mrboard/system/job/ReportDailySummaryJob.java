@@ -36,25 +36,61 @@ public class ReportDailySummaryJob implements Job {
     @Override
     public void execute(JobExecutionContext context) {
         LocalDate yesterday = LocalDate.now().minusDays(1);
-        log.info("Starting daily report calculation for {}", yesterday);
+        executeForDate(yesterday);
+    }
 
-        LocalDateTime startOfDay = yesterday.atStartOfDay();
-        LocalDateTime endOfDay = yesterday.atTime(LocalTime.MAX);
+    /**
+     * 计算指定日期的报表汇总并写入。
+     */
+    public void executeForDate(LocalDate date) {
+        log.info("Starting report calculation for {}", date);
+
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+
+        // 先删除已存在的该日汇总（避免重复）
+        LambdaQueryWrapper<ReportDailySummary> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(ReportDailySummary::getSummaryDate, date);
+        reportDailySummaryMapper.delete(deleteWrapper);
 
         List<Project> projects = projectMapper.selectList(null);
         int count = 0;
         for (Project project : projects) {
             try {
-                ReportDailySummary summary = calculateForProject(project.getId(), yesterday, startOfDay, endOfDay);
+                ReportDailySummary summary = calculateForProject(project.getId(), date, startOfDay, endOfDay);
                 if (summary != null) {
                     reportDailySummaryMapper.insert(summary);
                     count++;
                 }
             } catch (Exception e) {
-                log.error("Failed to calculate daily report for project {} on {}", project.getId(), yesterday, e);
+                log.error("Failed to calculate daily report for project {} on {}", project.getId(), date, e);
             }
         }
-        log.info("Daily report calculation finished for {}, {} projects processed", yesterday, count);
+        log.info("Report calculation finished for {}, {} projects processed", date, count);
+    }
+
+    /**
+     * 回溯补齐所有有 MR 数据但缺少汇总记录的日期。
+     * @return 处理的日期数
+     */
+    public int backfillAll() {
+        // 查询所有有 MR 创建/合并/关闭的日期
+        List<LocalDate> allDates = mrsMapper.selectDistinctDatesWithActivity();
+        // 查询已有汇总的日期
+        List<ReportDailySummary> existingSummaries = reportDailySummaryMapper.selectList(null);
+        var existingDates = existingSummaries.stream()
+                .map(ReportDailySummary::getSummaryDate)
+                .collect(java.util.stream.Collectors.toSet());
+
+        int count = 0;
+        for (LocalDate date : allDates) {
+            if (!existingDates.contains(date)) {
+                executeForDate(date);
+                count++;
+            }
+        }
+        log.info("Backfill completed, {} dates processed", count);
+        return count;
     }
 
     private ReportDailySummary calculateForProject(Long projectId, LocalDate date,

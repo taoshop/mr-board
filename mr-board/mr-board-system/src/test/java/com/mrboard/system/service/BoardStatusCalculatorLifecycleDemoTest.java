@@ -42,22 +42,23 @@ class BoardStatusCalculatorLifecycleDemoTest {
     }
 
     @Test
-    @DisplayName("场景4：CI 运行中 → CI 检查中 (ci_checking)")
-    void scenario4_ciRunning_shouldBeCiChecking() {
+    @DisplayName("场景4：CI 运行中 + Review 中 → Review 中 (reviewing)（CI 作为独立维度不驱动列）")
+    void scenario4_ciRunning_shouldBeReviewing() {
         String status = calculator.calculate("opened", false, "running", true, "feat: payment module", "reviewing", List.of("alice"));
-        assertEquals("ci_checking", status);
+        assertEquals("reviewing", status);
     }
 
     @Test
-    @DisplayName("场景5：CI 等待中 → CI 检查中 (ci_checking)")
-    void scenario5_ciPending_shouldBeCiChecking() {
+    @DisplayName("场景5：CI 等待中 + Review 中 → Review 中 (reviewing)（CI 作为独立维度不驱动列）")
+    void scenario5_ciPending_shouldBeReviewing() {
         String status = calculator.calculate("opened", false, "pending", true, "feat: payment module", "reviewing", List.of("alice"));
-        assertEquals("ci_checking", status);
+        assertEquals("reviewing", status);
     }
 
     @Test
-    @DisplayName("场景6：CI 失败 → 冲突待解决 (conflict)")
+    @DisplayName("场景6：CI 失败 + Review 中 → 冲突待解决 (conflict)（CI failed 归入 conflict 列）")
     void scenario6_ciFailed_shouldBeConflict() {
+        // CI 失败归入冲突待解决列，卡片上展示 CI 失败标识
         String status = calculator.calculate("opened", false, "failed", true, "feat: payment module", "reviewing", List.of("alice"));
         assertEquals("conflict", status);
     }
@@ -123,11 +124,11 @@ class BoardStatusCalculatorLifecycleDemoTest {
     }
 
     @Test
-    @DisplayName("场景15：冲突解决后 CI 重新运行 → CI 检查中 (ci_checking)")
-    void scenario15_conflictResolvedCiRunning_shouldBeCiChecking() {
-        // 冲突解决后，CI 重新触发，此时应显示 CI 检查中，而不是直接跳到可合并
+    @DisplayName("场景15：冲突解决后 CI 重新运行 + Review 中 → Review 中 (reviewing)（CI 不驱动列）")
+    void scenario15_conflictResolvedCiRunning_shouldBeReviewing() {
+        // 冲突解决后，CI 重新触发，此时仍在 Review 中列，卡片显示 CI 运行中标识
         String status = calculator.calculate("opened", false, "running", true, "feat: payment module", "reviewing", List.of("alice"));
-        assertEquals("ci_checking", status);
+        assertEquals("reviewing", status);
     }
 
     @Test
@@ -135,5 +136,50 @@ class BoardStatusCalculatorLifecycleDemoTest {
     void scenario16_hasReviewerNotApproved_shouldBeReviewing() {
         String status = calculator.calculate("opened", false, "success", true, "feat: payment module", "reviewing", List.of("alice"));
         assertEquals("reviewing", status);
+    }
+
+    @Test
+    @DisplayName("场景17：CI 失败 + approved + 不可合并 → 冲突待解决 (conflict)（CI failed 优先归入 conflict）")
+    void scenario17_ciFailedNotMergeable_shouldBeConflict() {
+        // CI 失败归入冲突待解决列，卡片展示 CI 失败标识
+        String status = calculator.calculate("opened", false, "failed", false, "feat: payment module", "approved", List.of("alice"));
+        assertEquals("conflict", status);
+    }
+
+    @Test
+    @DisplayName("场景18：CI 取消 (cancelled) → 不冲突，视为 unknown 无 CI 状态 → pending_review")
+    void scenario18_ciCancelled_shouldMapToPendingReview() {
+        // cancelled/skipped 不会触发冲突处理，按无 CI 处理
+        String status = calculator.calculate("opened", false, "cancelled", true, "feat: payment module", "pending", List.of());
+        assertEquals("pending_review", status);
+    }
+
+    @Test
+    @DisplayName("场景19：CI 被跳过 (skipped) → 同 cancelled 处理 → pending_review")
+    void scenario19_ciSkipped_shouldMapToPendingReview() {
+        String status = calculator.calculate("opened", false, "skipped", true, "feat: payment module", "pending", List.of());
+        assertEquals("pending_review", status);
+    }
+
+    @Test
+    @DisplayName("场景20：CI unknown → 按无 CI 处理 → pending_review")
+    void scenario20_ciUnknown_shouldMapToPendingReview() {
+        String status = calculator.calculate("opened", false, "unknown", true, "feat: payment module", "pending", List.of());
+        assertEquals("pending_review", status);
+    }
+
+    @Test
+    @DisplayName("场景21：冲突 + CI 运行中 → 冲突优先（冲突优先级高于 CI）")
+    void scenario21_conflictWithCiRunning_shouldBeConflict() {
+        // 冲突是最高优先级阻塞态，优先于 CI 状态
+        String status = calculator.calculate("opened", true, "running", true, "feat: payment module", "reviewing", List.of("alice"));
+        assertEquals("conflict", status);
+    }
+
+    @Test
+    @DisplayName("场景22：冲突 + CI 通过，但不可合并 → 冲突待解决")
+    void scenario22_conflictCiPassed_shouldBeConflict() {
+        String status = calculator.calculate("opened", true, "success", false, "feat: payment module", "reviewing", List.of("alice"));
+        assertEquals("conflict", status);
     }
 }
