@@ -16,8 +16,7 @@ import java.util.List;
  *   <li>platformStatus == "closed" → 已关闭 (closed)</li>
  *   <li>title startsWith "draft:" / "wip:" → 待 Review (pending_review)</li>
  *   <li>hasConflict == true → 冲突待解决 (conflict)</li>
- *   <li>ciStatus == "running"/"pending" → CI检查中 (ci_checking)</li>
- *   <li>ciStatus == "failed" → 冲突待解决 (conflict)</li>
+ *   <li>ciStatus == "running"/"pending"/"failed" → CI检查中 (ci_checking)</li>
  *   <li>无 reviewer 或 approvalStatus == "pending" → 待 Review (pending_review)</li>
  *   <li>approvalStatus == "changes_requested"/"reviewing" → Review中 (reviewing)</li>
  *   <li>approvalStatus == "approved" 且 mergeable == true → 可合并 (ready)</li>
@@ -76,17 +75,11 @@ public class BoardStatusCalculator {
             return "conflict";
         }
 
-        // 4. CI 状态
-        boolean ciRunning = "running".equalsIgnoreCase(ciStatus) || "pending".equalsIgnoreCase(ciStatus);
+        // 4. CI 状态 — 统一归入 ci_checking 列（running/pending/failed 都表示 CI 相关）
+        boolean ciRunningOrPending = "running".equalsIgnoreCase(ciStatus) || "pending".equalsIgnoreCase(ciStatus);
         boolean ciFailed = "failed".equalsIgnoreCase(ciStatus);
 
-        // CI 失败直接阻塞合并
-        if (ciFailed) {
-            return "conflict";
-        }
-
-        // CI 运行中/等待中 → CI 检查中
-        if (ciRunning) {
+        if (ciRunningOrPending || ciFailed) {
             return "ci_checking";
         }
 

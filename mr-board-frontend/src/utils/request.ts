@@ -33,6 +33,10 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
+    // Blob 下载响应直接返回，不解析 JSON
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
     const { code, message: msg } = response.data
     if (code !== 200) {
       console.log('[request interceptor] error msg:', msg)

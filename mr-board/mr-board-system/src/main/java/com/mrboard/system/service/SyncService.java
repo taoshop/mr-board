@@ -185,7 +185,10 @@ public class SyncService {
                             approvalStatus,
                             reviewers
                     );
-                    savedMr.setBoardStatus(newBoardStatus);
+                    // 若手动拖拽设置了状态，保留手动状态，不覆盖
+                    if (savedMr.getManualStatus() == null) {
+                        savedMr.setBoardStatus(newBoardStatus);
+                    }
                     mrsMapper.updateById(savedMr);
                 } catch (Exception e) {
                     log.warn("Failed to fetch review data for MR {} in project {}: {}",
@@ -218,7 +221,17 @@ public class SyncService {
                         currentApprovalStatus,
                         currentReviewers
                 );
-                savedMr.setBoardStatus(newBoardStatus);
+
+                // 若用户手动拖拽设置了状态，同步保留手动状态（除非 MR 在平台已合并/关闭）
+                if (savedMr.getManualStatus() != null) {
+                    String platformStatus = savedMr.getPlatformStatus();
+                    if ("merged".equalsIgnoreCase(platformStatus) || "closed".equalsIgnoreCase(platformStatus)) {
+                        savedMr.setBoardStatus(newBoardStatus);
+                        savedMr.setManualStatus(null);
+                    }
+                } else {
+                    savedMr.setBoardStatus(newBoardStatus);
+                }
                 mrsMapper.updateById(savedMr);
 
                 // Fetch and cache MR comments
@@ -287,8 +300,15 @@ public class SyncService {
                 .anyMatch(ci -> "running".equalsIgnoreCase(ci.getStatus()) || "pending".equalsIgnoreCase(ci.getStatus()));
         boolean hasFailed = ciList.stream()
                 .anyMatch(ci -> "failed".equalsIgnoreCase(ci.getStatus()));
+        boolean hasCanceled = ciList.stream()
+                .anyMatch(ci -> "cancelled".equalsIgnoreCase(ci.getStatus()) || "skipped".equalsIgnoreCase(ci.getStatus())
+                        || "canceled".equalsIgnoreCase(ci.getStatus()));
         if (hasRunning) return "running";
         if (hasFailed) return "failed";
+        // cancelled/skipped 不应归为 success，返回 unknown
+        if (hasCanceled && ciList.stream().noneMatch(ci -> "success".equalsIgnoreCase(ci.getStatus()))) {
+            return "unknown";
+        }
         return "success";
     }
 
@@ -296,7 +316,21 @@ public class SyncService {
         LambdaQueryWrapper<Mrs> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Mrs::getProjectId, projectId)
                 .eq(Mrs::getPlatformMrId, dto.getPlatformMrId());
-        Mrs existing = mrsMapper.selectOne(wrapper);
+        List<Mrs> existingList = mrsMapper.selectList(wrapper);
+        Mrs existing = null;
+        if (!existingList.isEmpty()) {
+            // 如果有重复记录，保留 id 最大的（最新），删除多余的
+            existing = existingList.stream()
+                    .max(java.util.Comparator.comparing(Mrs::getId))
+                    .orElse(null);
+            for (Mrs dup : existingList) {
+                if (!dup.getId().equals(existing.getId())) {
+                    mrsMapper.deleteById(dup.getId());
+                    log.warn("Deleted duplicate MR record: id={}, projectId={}, platformMrId={}",
+                            dup.getId(), projectId, dto.getPlatformMrId());
+                }
+            }
+        }
 
         Mrs entity = new Mrs();
         entity.setProjectId(projectId);
@@ -328,20 +362,26 @@ public class SyncService {
         }
         entity.setCiStatus(ciStatus);
 
-        // 初始计算 boardStatus（不含 review 数据，后续会重新计算）
         String boardStatus = boardStatusCalculator.calculate(
                 dto.getPlatformStatus(), dto.getHasConflict(), ciStatus,
                 dto.getMergeable(), dto.getTitle(), "pending", dto.getReviewers()
         );
-        entity.setBoardStatus(boardStatus);
 
         if (existing != null) {
             entity.setId(existing.getId());
             entity.setReviewers(existing.getReviewers());
             entity.setApprovalStatus(existing.getApprovalStatus());
+            entity.setManualStatus(existing.getManualStatus());
+            // 若手动拖拽设置了状态，保留手动状态，不覆盖
+            if (existing.getManualStatus() != null) {
+                entity.setBoardStatus(existing.getManualStatus());
+            } else {
+                entity.setBoardStatus(boardStatus);
+            }
             mrsMapper.updateById(entity);
             return entity;
         } else {
+            entity.setBoardStatus(boardStatus);
             mrsMapper.insert(entity);
             return entity;
         }
@@ -351,7 +391,20 @@ public class SyncService {
         LambdaQueryWrapper<MrComment> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(MrComment::getMrId, mrId)
                 .eq(MrComment::getPlatformCommentId, dto.getPlatformCommentId());
-        MrComment existing = commentMapper.selectOne(wrapper);
+        List<MrComment> existingList = commentMapper.selectList(wrapper);
+        MrComment existing = null;
+        if (!existingList.isEmpty()) {
+            existing = existingList.stream()
+                    .max(java.util.Comparator.comparing(MrComment::getId))
+                    .orElse(null);
+            for (MrComment dup : existingList) {
+                if (!dup.getId().equals(existing.getId())) {
+                    commentMapper.deleteById(dup.getId());
+                    log.warn("Deleted duplicate comment record: id={}, mrId={}, platformCommentId={}",
+                            dup.getId(), mrId, dto.getPlatformCommentId());
+                }
+            }
+        }
 
         MrComment entity = new MrComment();
         entity.setMrId(mrId);
@@ -374,7 +427,20 @@ public class SyncService {
         LambdaQueryWrapper<CiJob> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CiJob::getProjectId, projectId)
                 .eq(CiJob::getPlatformJobId, dto.getPlatformJobId());
-        CiJob existing = ciJobMapper.selectOne(wrapper);
+        List<CiJob> existingList = ciJobMapper.selectList(wrapper);
+        CiJob existing = null;
+        if (!existingList.isEmpty()) {
+            existing = existingList.stream()
+                    .max(java.util.Comparator.comparing(CiJob::getId))
+                    .orElse(null);
+            for (CiJob dup : existingList) {
+                if (!dup.getId().equals(existing.getId())) {
+                    ciJobMapper.deleteById(dup.getId());
+                    log.warn("Deleted duplicate CI job record: id={}, projectId={}, platformJobId={}",
+                            dup.getId(), projectId, dto.getPlatformJobId());
+                }
+            }
+        }
 
         CiJob entity = new CiJob();
         entity.setProjectId(projectId);

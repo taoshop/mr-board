@@ -75,7 +75,10 @@ public class ReportService {
 
         vo.setTotalMrCount(totalCreated);
         vo.setMergedMrCount(totalMerged);
-        vo.setOpenMrCount(totalCreated - totalMerged - totalClosed);
+        // 直接查询 DB 中的实际开放 MR 数（推算可能为负数）
+        LambdaQueryWrapper<Mrs> openWrapper = new LambdaQueryWrapper<>();
+        openWrapper.notIn(Mrs::getBoardStatus, "merged", "closed");
+        vo.setOpenMrCount(mrsMapper.selectCount(openWrapper).intValue());
         vo.setAvgMergeHours(avgMergeHours);
         vo.setCiSuccessRate(MathUtils.safeDivide(totalCiSuccess, totalCi, 4)
                 .multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP));
@@ -116,11 +119,15 @@ public class ReportService {
                 vo.getClosedData().add(entry.getValue().stream().mapToInt(ReportDailySummary::getClosedCount).sum());
             }
         } else {
+            Map<LocalDate, List<ReportDailySummary>> dayMap = new LinkedHashMap<>();
             for (ReportDailySummary r : list) {
-                vo.getLabels().add(r.getSummaryDate().toString());
-                vo.getCreatedData().add(r.getCreatedCount());
-                vo.getMergedData().add(r.getMergedCount());
-                vo.getClosedData().add(r.getClosedCount());
+                dayMap.computeIfAbsent(r.getSummaryDate(), k -> new ArrayList<>()).add(r);
+            }
+            for (Map.Entry<LocalDate, List<ReportDailySummary>> entry : dayMap.entrySet()) {
+                vo.getLabels().add(entry.getKey().toString());
+                vo.getCreatedData().add(entry.getValue().stream().mapToInt(ReportDailySummary::getCreatedCount).sum());
+                vo.getMergedData().add(entry.getValue().stream().mapToInt(ReportDailySummary::getMergedCount).sum());
+                vo.getClosedData().add(entry.getValue().stream().mapToInt(ReportDailySummary::getClosedCount).sum());
             }
         }
         return vo;

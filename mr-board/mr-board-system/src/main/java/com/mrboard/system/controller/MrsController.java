@@ -213,6 +213,12 @@ public class MrsController {
         }
 
         mr.setBoardStatus(newStatus);
+        // 记录手动拖拽状态，同步时保留（终态除外）
+        if ("merged".equals(newStatus) || "closed".equals(newStatus)) {
+            mr.setManualStatus(null);
+        } else {
+            mr.setManualStatus(newStatus);
+        }
         mrsMapper.updateById(mr);
 
         recordHistory(mr.getId(), oldStatus, newStatus, currentUser, httpRequest.getRemoteAddr());

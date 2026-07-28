@@ -18,7 +18,7 @@
         <div class="status-wrap">
           <!-- CI 状态小圆点（头部标识） -->
           <span
-            v-if="data.ciStatus === 'running' || data.ciStatus === 'pending' || data.ciStatus === 'failed'"
+            v-if="data.ciStatus"
             class="ci-dot"
             :class="'ci-' + data.ciStatus"
             :title="ciTooltip"
@@ -26,6 +26,8 @@
             <el-icon v-if="data.ciStatus === 'running'" class="is-loading"><Loading /></el-icon>
             <el-icon v-else-if="data.ciStatus === 'pending'"><Minus /></el-icon>
             <el-icon v-else-if="data.ciStatus === 'failed'"><CircleClose /></el-icon>
+            <el-icon v-else-if="data.ciStatus === 'success'"><CircleCheck /></el-icon>
+            <el-icon v-else><Minus /></el-icon>
           </span>
           <el-tag size="small" :type="tagType" effect="light">{{ statusLabel }}</el-tag>
         </div>
@@ -55,9 +57,6 @@
         <el-tag v-if="data.hasConflict" size="small" type="danger" effect="dark">
           <el-icon><Warning /></el-icon> 代码冲突
         </el-tag>
-        <el-tag v-else-if="data.ciStatus === 'failed'" size="small" type="danger" effect="dark">
-          <el-icon><CircleClose /></el-icon> CI 失败
-        </el-tag>
         <el-tag v-else-if="data.mergeable === false" size="small" type="warning" effect="dark">
           <el-icon><Lock /></el-icon> 需变基/保护规则
         </el-tag>
@@ -78,11 +77,12 @@
           <span class="branch-name">{{ data.targetBranch }}</span>
         </div>
       </div>
-      <!-- CI 摘要（running/pending/failed 时常驻显示） -->
+      <!-- CI 摘要 -->
       <div v-if="ciSummaryText" class="ci-summary">
         <el-icon v-if="data.ciStatus === 'running'" class="is-loading"><Loading /></el-icon>
         <el-icon v-else-if="data.ciStatus === 'pending'"><Minus /></el-icon>
         <el-icon v-else-if="data.ciStatus === 'failed'"><CircleClose /></el-icon>
+        <el-icon v-else-if="data.ciStatus === 'success'"><CircleCheck /></el-icon>
         <span>{{ ciSummaryText }}</span>
       </div>
       <div class="footer">
@@ -162,6 +162,8 @@ const ciTooltip = computed(() => {
     running: 'CI 运行中',
     pending: 'CI 等待中',
     failed: 'CI 失败',
+    success: 'CI 通过',
+    unknown: 'CI 状态未知',
   }
   return map[props.data.ciStatus || ''] || ''
 })
@@ -171,6 +173,7 @@ const ciSummaryText = computed(() => {
     running: 'CI 运行中',
     pending: 'CI 等待中',
     failed: 'CI 失败，请检查日志',
+    success: 'CI 通过',
   }
   return map[props.data.ciStatus || ''] || ''
 })
@@ -247,6 +250,7 @@ function handleCardClick(e: MouseEvent) {
 
   &.status-pending_review { border-left-color: #909399; }
   &.status-reviewing { border-left-color: #e6a23c; }
+  &.status-ci_checking { border-left-color: #409eff; }
   &.status-conflict { border-left-color: #f56c6c; }
   &.status-ready { border-left-color: #67c23a; }
   &.status-merged { border-left-color: #409eff; }
@@ -282,6 +286,14 @@ function handleCardClick(e: MouseEvent) {
 
       &.ci-failed {
         color: #f56c6c;
+      }
+
+      &.ci-success {
+        color: #67c23a;
+      }
+
+      &.ci-unknown {
+        color: #c0c4cc;
       }
     }
 

@@ -19,4 +19,7 @@ public interface MrsMapper extends BaseMapper<Mrs> {
 
     @Select("SELECT board_status as boardStatus, COUNT(*) as count FROM mrs GROUP BY board_status")
     List<Map<String, Object>> selectStatusDistribution();
+
+    @Select("SELECT DISTINCT DATE(created_at) FROM mrs UNION SELECT DISTINCT DATE(merged_at) FROM mrs WHERE merged_at IS NOT NULL UNION SELECT DISTINCT DATE(closed_at) FROM mrs WHERE closed_at IS NOT NULL ORDER BY 1")
+    List<java.time.LocalDate> selectDistinctDatesWithActivity();
 }

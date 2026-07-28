@@ -35,6 +35,9 @@ public class Mrs {
     private String webUrl;
     private String reviewers;
     private String approvalStatus;
+    /** 手动拖拽状态覆盖值，非NULL时同步保留此状态 */
+    @TableField("manual_status")
+    private String manualStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime mergedAt;

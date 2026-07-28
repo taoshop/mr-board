@@ -7,6 +7,7 @@
       <el-select v-model="filters.status" placeholder="状态" clearable multiple collapse-tags style="width: 200px" @change="onFilterChange">
         <el-option label="待 Review" value="pending_review" />
         <el-option label="Review 中" value="reviewing" />
+        <el-option label="CI 检查中" value="ci_checking" />
         <el-option label="冲突待解决" value="conflict" />
         <el-option label="可合并" value="ready" />
         <el-option label="已合并" value="merged" />
@@ -65,6 +66,7 @@
             :items="boardData[col.key] || []"
             :min-item-size="160"
             key-field="id"
+            :key="scrollerKey"
           >
             <template #default="{ item, index, active }">
               <DynamicScrollerItem
@@ -299,13 +301,8 @@ const columnStats = computed(() => {
     switch (col.key) {
       case 'pending_review': {
         const noReviewer = list.filter((m) => !m.reviewers).length
-        const ciRunning = list.filter(
-          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
-        ).length
         if (noReviewer)
           items.push({ label: '未指派', value: noReviewer, color: '#909399' })
-        if (ciRunning)
-          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
         break
       }
       case 'reviewing': {
@@ -321,32 +318,32 @@ const columnStats = computed(() => {
             m.approvalStatus === 'pending' ||
             m.approvalStatus === 'reviewing'
         ).length
-        const ciRunning = list.filter(
-          (m) => m.ciStatus === 'running' || m.ciStatus === 'pending'
-        ).length
         if (approved)
           items.push({ label: '已通过', value: approved, color: '#67c23a' })
         if (changesReq)
           items.push({ label: '需修改', value: changesReq, color: '#f56c6c' })
         if (pending)
           items.push({ label: '待评审', value: pending, color: '#909399' })
+        break
+      }
+      case 'ci_checking': {
+        const ciRunning = list.filter((m) => m.ciStatus === 'running' || m.ciStatus === 'pending').length
+        const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
         if (ciRunning)
-          items.push({ label: 'CI中', value: ciRunning, color: '#e6a23c' })
+          items.push({ label: '运行中', value: ciRunning, color: '#e6a23c' })
+        if (ciFailed)
+          items.push({ label: 'CI失败', value: ciFailed, color: '#f56c6c' })
         break
       }
       case 'conflict': {
         const conflict = list.filter((m) => m.hasConflict).length
-        const ciFailed = list.filter((m) => m.ciStatus === 'failed').length
         const notMergeable = list.filter(
           (m) =>
             m.mergeable === false &&
-            !m.hasConflict &&
-            m.ciStatus !== 'failed'
+            !m.hasConflict
         ).length
         if (conflict)
           items.push({ label: '冲突', value: conflict, color: '#f56c6c' })
-        if (ciFailed)
-          items.push({ label: 'CI失败', value: ciFailed, color: '#f56c6c' })
         if (notMergeable)
           items.push({ label: '需变基', value: notMergeable, color: '#e6a23c' })
         break
@@ -363,6 +360,14 @@ const columnStats = computed(() => {
   }
   return stats
 })
+
+/** 筛选变化时刷新 DynamicScroller 的 key，递增确保强制重新渲染 */
+const scrollerVersion = ref(0)
+
+/** 筛选变化时刷新 DynamicScroller 的 key */
+const scrollerKey = computed(() =>
+  `board-${filters.author}-${filters.branch}-${filters.projectId.join(',')}-${filters.status.join(',')}-${scrollerVersion.value}`
+)
 
 function canDrag(mr: Mr): boolean {
   if (isReviewer.value) return false
@@ -443,6 +448,8 @@ async function fetchBoard() {
       const newData = res.data
       checkStatusChange(newData)
       boardData.value = newData
+      // 递增版本号，强制 DynamicScroller 重新渲染
+      scrollerVersion.value++
     }
   } catch (e) {
     ElMessage.error('获取看板数据失败')

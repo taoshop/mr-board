@@ -203,6 +203,7 @@ CREATE TABLE IF NOT EXISTS mrs (
     labels          VARCHAR(512) COMMENT '标签（JSON或逗号分隔）',
     reviewers       VARCHAR(512) COMMENT '评审人列表（逗号分隔）',
     approval_status VARCHAR(32) DEFAULT 'pending' COMMENT '评审状态：pending/reviewing/approved',
+    manual_status   VARCHAR(32) DEFAULT NULL COMMENT '手动拖拽状态覆盖值，非NULL时同步保留此状态',
     web_url         VARCHAR(255) NOT NULL COMMENT 'MR页面链接',
     created_at      DATETIME     NOT NULL COMMENT '平台创建时间',
     updated_at      DATETIME     NOT NULL COMMENT '平台更新时间',

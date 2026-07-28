@@ -39,6 +39,9 @@ public class ReportController {
     private final ReportService reportService;
     private final AsyncExportService asyncExportService;
     private final ExportTaskManager exportTaskManager;
+    private final com.mrboard.system.mapper.ReportDailySummaryMapper reportDailySummaryMapper;
+    private final com.mrboard.system.job.ReportDailySummaryJob reportDailySummaryJob;
+    private final org.quartz.Scheduler scheduler;
 
     @Operation(summary = "概览指标", description = "支持周或月维度查询")
     @GetMapping("/overview")
@@ -89,6 +92,22 @@ public class ReportController {
             @Parameter(description = "分布类型：project / author / status") @RequestParam String type
     ) {
         return Result.success(reportService.getDistribution(type));
+    }
+
+    @Operation(summary = "手动触发日汇总", description = "重新计算并写入指定日期的报表汇总数据；不传日期则回溯补齐全部缺失日期")
+    @PostMapping("/admin/trigger-summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Result<String> triggerSummary(
+            @Parameter(description = "目标日期 yyyy-MM-dd，不传则补齐所有缺失日期")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate targetDate
+    ) {
+        if (targetDate != null) {
+            reportDailySummaryJob.executeForDate(targetDate);
+            return Result.success(targetDate + " 日汇总计算完成");
+        }
+        // 不传日期：回溯补齐所有有 MR 数据但无汇总的日期
+        int count = reportDailySummaryJob.backfillAll();
+        return Result.success("回溯补齐完成，共处理 " + count + " 天数据");
     }
 
     @Operation(summary = "导出 Excel", description = "流式导出全部 MR 数据")
