@@ -23,11 +23,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "Git源管理", description = "Git源CRUD、测试连接、手动同步触发（仅ADMIN）")
+@Tag(name = "Git源管理", description = "Git源CRUD、测试连接、手动同步触发")
 @RestController
 @RequestMapping("/api/admin/git-sources")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class GitSourceController {
 
     private final GitSourceMapper gitSourceMapper;
@@ -39,6 +38,7 @@ public class GitSourceController {
 
     @Operation(summary = "Git源分页列表")
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER','REVIEWER')")
     public Result<Page<GitSource>> list(
             @Parameter(description = "页码") @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") Integer size) {
@@ -49,6 +49,7 @@ public class GitSourceController {
 
     @Operation(summary = "Git源详情")
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD','DEVELOPER','REVIEWER')")
     public Result<GitSource> getById(@Parameter(description = "Git源ID") @PathVariable Long id) {
         GitSource source = gitSourceMapper.selectById(id);
         if (source != null) {
@@ -59,6 +60,7 @@ public class GitSourceController {
 
     @Operation(summary = "创建Git源")
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
     public Result<Void> create(@Valid @RequestBody GitSourceRequest request) {
         if (request.getAccessToken() == null || request.getAccessToken().isBlank()) {
             return Result.error(400, "Token不能为空");
@@ -94,6 +96,7 @@ public class GitSourceController {
 
     @Operation(summary = "更新Git源")
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
     public Result<Void> update(@Parameter(description = "Git源ID") @PathVariable Long id, @Valid @RequestBody GitSourceRequest request) {
         GitSource source = gitSourceMapper.selectById(id);
         if (source == null) {
@@ -139,6 +142,7 @@ public class GitSourceController {
 
     @Operation(summary = "删除Git源")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
     public Result<Void> delete(@Parameter(description = "Git源ID") @PathVariable Long id) {
         syncScheduleService.remove(id);
         gitSourceMapper.deleteById(id);
@@ -148,6 +152,7 @@ public class GitSourceController {
 
     @Operation(summary = "测试Git源连接")
     @PostMapping("/{id}/test")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
     public Result<String> testConnection(@Parameter(description = "Git源ID") @PathVariable Long id) {
         GitSource source = gitSourceMapper.selectById(id);
         if (source == null) {
@@ -165,6 +170,7 @@ public class GitSourceController {
 
     @Operation(summary = "触发同步", description = "支持 full（全量）或 incremental（增量）同步")
     @PostMapping("/{id}/sync")
+    @PreAuthorize("hasAnyRole('ADMIN','PM','TECHLEAD')")
     public Result<String> triggerSync(
             @Parameter(description = "Git源ID") @PathVariable Long id,
             @Parameter(description = "同步类型：full / incremental") @RequestParam(defaultValue = "incremental") String type) {
