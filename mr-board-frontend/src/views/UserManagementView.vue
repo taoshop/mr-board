@@ -160,8 +160,9 @@ async function fetchRoles() {
   try {
     const res: any = await request.get('/admin/users/roles/list')
     allRoles.value = res.data || []
-  } catch {
-    // ignore
+  } catch (err: any) {
+    console.error('获取角色列表失败:', err)
+    ElMessage.warning('角色列表加载失败，请刷新页面重试')
   }
 }
 
