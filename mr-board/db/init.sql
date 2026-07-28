@@ -10,6 +10,8 @@ CREATE DATABASE IF NOT EXISTS mr_board
 
 USE mr_board;
 
+SET NAMES utf8mb4;
+
 -- ------------------------------------------------------------
 -- Table: users
 -- ------------------------------------------------------------
