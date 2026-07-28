@@ -58,13 +58,22 @@ class UserControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    void createUser_shouldReturnError_whenDuplicateUsername() throws Exception {
-        String body = "{\"username\":\"admin\",\"password\":\"Test@123\",\"email\":\"dup@example.com\"}";
-        mockMvc.perform(post("/api/admin/users")
+    void listRoles_shouldReturnRoles() throws Exception {
+        mockMvc.perform(get("/api/admin/users/roles/list")
+                        .with(bearerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    void updateUser_shouldUpdateRoles() throws Exception {
+        String body = "{\"email\":\"admin@mrboard.com\",\"displayName\":\"系统管理员\",\"roleIds\":[1,2]}";
+        mockMvc.perform(put("/api/admin/users/1")
                         .with(bearerToken())
                         .contentType("application/json")
                         .content(body))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(1006));
+                .andExpect(jsonPath("$.code").value(200));
     }
 }

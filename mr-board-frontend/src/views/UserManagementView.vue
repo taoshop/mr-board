@@ -56,6 +56,11 @@
         <el-form-item label="显示名">
           <el-input v-model="form.displayName" />
         </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="form.roleIds" multiple placeholder="请选择角色" style="width: 100%">
+            <el-option v-for="role in allRoles" :key="role.id" :label="role.name" :value="role.id" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -87,7 +92,10 @@ const form = reactive({
   password: '',
   email: '',
   displayName: '',
+  roleIds: [] as number[],
 })
+
+const allRoles = ref<any[]>([])
 
 function handleSelectionChange(val: any[]) {
   selectedRows.value = val
@@ -128,6 +136,7 @@ function handleAdd() {
   form.password = ''
   form.email = ''
   form.displayName = ''
+  form.roleIds = []
   dialogVisible.value = true
 }
 
@@ -139,7 +148,22 @@ function handleEdit(row: any) {
   form.password = ''
   form.email = row.email
   form.displayName = row.displayName
+  // 回填角色ID列表
+  const roleList = row.roles || []
+  form.roleIds = allRoles.value
+    .filter((r: any) => roleList.includes(r.name))
+    .map((r: any) => r.id)
   dialogVisible.value = true
+}
+
+async function fetchRoles() {
+  try {
+    const res: any = await request.get('/admin/users/roles/list')
+    allRoles.value = res.data || []
+  } catch (err: any) {
+    console.error('获取角色列表失败:', err)
+    ElMessage.warning('角色列表加载失败，请刷新页面重试')
+  }
 }
 
 async function handleSubmit() {
@@ -169,7 +193,10 @@ async function handleDelete(row: any) {
   }
 }
 
-onMounted(fetchUsers)
+onMounted(() => {
+  fetchUsers()
+  fetchRoles()
+})
 </script>
 
 <style scoped>
