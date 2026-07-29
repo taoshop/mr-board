@@ -53,6 +53,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: test
       MYSQL_PASSWORD: MrBoard@2026
+      APP_CORS_ALLOWED_ORIGINS: "https://localhost,http://localhost,http://localhost:5173,http://localhost:5174,http://localhost:3000"
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-mr-board-access-secret-key-2026-07-25-very-long}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-mr-board-refresh-secret-key-2026-07-25-very-long}
       # 同步代理配置（默认关闭；Windows Docker Desktop 访问宿主机代理请改为 host.docker.internal）
